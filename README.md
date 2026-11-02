@@ -8,8 +8,8 @@ Petite application full stack qui :
 4. génère avec un LLM une brève de 100 à 150 mots (titre, faits clés, chiffres, lien source) ;
 5. vérifie que chaque chiffre de la brève figure dans le PDF source, et signale ceux qui n'y sont pas.
 
-- **Application déployée** : _à compléter_
-- **Repo** : _à compléter_
+- **Application déployée** : https://boomingecoinfo.vercel.app
+- **Repo** : https://github.com/trimize/ecoinfo
 
 ## Lancer en local
 
