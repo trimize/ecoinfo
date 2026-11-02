@@ -1,11 +1,8 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
+import { currentModel, generateStructured } from "./llm";
 import { checkFigures } from "./numbers";
 import { fetchPdfText } from "./pdf";
 import type { Brief, Publication } from "./types";
-
-export const MODEL = process.env.ANTHROPIC_MODEL || "claude-opus-5-5";
 
 const BriefSchema = z.object({
   title: z.string().describe("Titre factuel, 12 mots maximum"),
@@ -48,7 +45,7 @@ export async function generateBrief(p: Publication): Promise<Brief> {
     id: `${p.id}-${Date.now()}`,
     publicationId: p.id,
     sourceUrl: p.pdfUrl,
-    model: MODEL,
+    model: currentModel(),
     sourceChars: src.text.length,
     sourceTruncated: src.truncated,
     createdAt: new Date().toISOString(),
@@ -68,20 +65,7 @@ export async function generateBrief(p: Publication): Promise<Brief> {
     };
   }
 
-  const client = new Anthropic();
-  const response = await client.beta.messages.parse({
-    model: MODEL,
-    max_tokens: 16000,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
-    output_config: { effort: "medium", format: betaZodOutputFormat(BriefSchema) },
-    system: SYSTEM_PROMPT,
-    messages: [{ role: "user", content: buildUserPrompt(p, src.text) }],
-  });
-  if (response.stop_reason === "refusal") throw new Error("Le modèle a refusé la requête");
-  if (response.stop_reason === "max_tokens") throw new Error("Réponse tronquée (max_tokens)");
-  const out = response.parsed_output;
-  if (!out) throw new Error("Sortie structurée invalide");
+  const { data: out, model } = await generateStructured(BriefSchema, SYSTEM_PROMPT, buildUserPrompt(p, src.text));
 
   // Verify every number of title + body + key facts against the source text.
   const figures = checkFigures([out.title, out.body, ...out.key_facts].join("\n"), src.text);
@@ -94,7 +78,7 @@ export async function generateBrief(p: Publication): Promise<Brief> {
 
   return {
     ...base,
-    model: response.model,
+    model,
     title: out.title,
     body: out.body,
     keyFacts: out.key_facts,

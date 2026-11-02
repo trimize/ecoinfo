@@ -15,7 +15,7 @@ Petite application full stack qui :
 
 ```bash
 npm install
-cp .env.example .env.local   # renseigner ANTHROPIC_API_KEY (Supabase optionnel)
+cp .env.example .env.local   # renseigner GEMINI_API_KEY (gratuite : https://aistudio.google.com/apikey)
 npm run dev                  # http://localhost:3000, puis « Synchroniser » et « Générer les brèves »
 npm run ingest -- 5          # (alternative CLI) ingestion des 5 derniers jours
 npm test                     # tests du contrôle des chiffres
@@ -31,7 +31,7 @@ Sans variables Supabase, les données sont stockées dans `.data/db.json`, ce qu
 | Front + API | **Next.js 15 (App Router) + React 19 + Tailwind** | Un seul déploiement Vercel. Les pages sont des Server Components qui lisent la base directement ; deux routes API (`/api/ingest`, `/api/briefs`). |
 | Stockage | **Supabase (Postgres)**, avec un fallback fichier JSON | Upsert idempotent sur l'identifiant AMF, filtres indexés. Le fallback local évite toute configuration pour essayer le projet. |
 | Extraction PDF | **unpdf** (pdf.js) | Fonctionne en serverless, sans binaire natif. |
-| LLM | **Claude Opus 5.5** (`@anthropic-ai/sdk`), sortie structurée validée par Zod | Le JSON est contraint par schéma, donc pas de parsing fragile. Effort `medium`, car il s'agit d'une tâche de synthèse courte. Le modèle de repli (`fallbacks: "default"`) est activé en cas de refus. |
+| LLM | **Gemini 2.5 Flash** (`@google/genai`, offre gratuite), avec **Claude** (`@anthropic-ai/sdk`) en alternative via `LLM_PROVIDER=anthropic` | Coût nul pour un test. La sortie JSON est contrainte par un schéma JSON généré depuis Zod, puis revalidée par Zod. Les deux fournisseurs passent par la même interface (`src/lib/llm.ts`) : changer de modèle ne touche ni au prompt ni à la vérification. Les erreurs 429 de l'offre gratuite sont relancées avec un délai croissant. |
 | Vérification | **Code déterministe** (regex + normalisation numérique), sans LLM | On ne demande pas au modèle de noter son propre travail. |
 | Planification | Cron Vercel quotidien sur `/api/ingest` | Garde la base à jour sans action manuelle. |
 
@@ -41,7 +41,8 @@ La génération se fait **une publication par requête HTTP** : le bouton encha�
 src/lib/amf.ts       client API Opendatasoft + normalisation des enregistrements
 src/lib/scoring.ts   score éditorial, détection des doublons FR/EN, sélection
 src/lib/pdf.ts       téléchargement et extraction de texte
-src/lib/brief.ts     prompt + appel LLM + assemblage de la brève et de son statut
+src/lib/llm.ts       fournisseurs LLM (Gemini par défaut, Claude en option), sortie structurée
+src/lib/brief.ts     prompt + assemblage de la brève et de son statut
 src/lib/numbers.ts   extraction et vérification des chiffres
 src/lib/store.ts     Supabase / fichier JSON
 src/app/             pages (liste, fiche, brèves, méthode) et routes API
@@ -159,11 +160,12 @@ Rédige la brève (titre, corps de 100 à 150 mots, 3 à 5 faits clés chiffrés
 ## Idées d'amélioration (avec plus de temps)
 
 - **Vérification sémantique** : en plus du contrôle numérique, extraire des triplets (métrique, période, valeur) de la brève et du document, puis vérifier l'attribution, pas seulement la présence. Les *citations* de l'API Claude (passer le PDF en bloc `document` avec `citations: enabled`) donneraient en plus un passage source pour chaque phrase.
+- **Choix du modèle** : comparer Gemini Flash et Claude sur un même jeu de publications, en mesurant le taux de chiffres introuvables et la qualité rédactionnelle. L'interface `llm.ts` le permet déjà.
 - **Sélection** : apprendre les poids du score à partir de ce que la rédaction publie réellement (feedback « publié / ignoré ») ; ajouter des signaux de marché (variation du cours, capitalisation) et de nouveauté (premier communiqué sur le sujet vs relance) ; regrouper les dépôts multiples d'un même événement (communiqué, présentation, rapport).
 - **Fiabilité de l'ingestion** : ingestion incrémentale par curseur de date, gestion des mises à jour (`inf_upg_sts` ≠ `NEW`), OCR pour les PDF scannés, référentiel des émetteurs (ISIN / LEI) pour corriger les noms.
 - **Workflow rédactionnel** : édition de la brève dans l'interface, avec revérification en direct à chaque modification ; statut publié / rejeté ; historique des versions ; alertes temps réel sur les informations privilégiées des valeurs suivies.
 - **Évaluation** : constituer un jeu d'environ 50 publications annotées pour mesurer le taux de chiffres introuvables et la qualité éditoriale selon le prompt et le modèle.
-- **Sécurité** : authentification sur les routes qui déclenchent des appels LLM payants (aujourd'hui publiques).
+- **Sécurité** : authentification sur les routes qui déclenchent des appels LLM (quota gratuit facilement épuisable, ou coût avec un modèle payant) (aujourd'hui publiques).
 
 ## Temps passé
 
