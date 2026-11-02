@@ -37,11 +37,19 @@ Sans variables Supabase, les données sont stockées dans `.data/db.json`, ce qu
 | Front + API | **Next.js 15 (App Router) + React 19 + Tailwind** | Un seul déploiement Vercel. Les pages sont des Server Components qui lisent la base directement ; deux routes API (`/api/ingest`, `/api/briefs`). |
 | Stockage | **Supabase (Postgres)**, avec un fallback fichier JSON | Upsert idempotent sur l'identifiant AMF, filtres indexés. Le fallback local évite toute configuration pour essayer le projet. |
 | Extraction PDF | **unpdf** (pdf.js) | Fonctionne en serverless, sans binaire natif. |
-| LLM | **Gemini 3.8 Flash** (`@google/genai`, offre gratuite), avec **Claude** (`@anthropic-ai/sdk`) en alternative via `LLM_PROVIDER=anthropic` | Coût nul pour un test. La sortie JSON est contrainte par un schéma JSON généré depuis Zod, puis revalidée par Zod. Les deux fournisseurs passent par la même interface (`src/lib/llm.ts`) : changer de modèle ne touche ni au prompt ni à la vérification. Les erreurs 429 de l'offre gratuite sont relancées avec un délai croissant. |
+| LLM | **Google Gemini 3.8 Flash** (`@google/genai`), offre gratuite | Choisi **uniquement pour le coût** : gratuit pour un exercice. La sortie JSON est contrainte par un schéma généré depuis Zod, puis revalidée par Zod. Les erreurs 429/503 de l'offre gratuite sont relancées, puis le client bascule sur un autre modèle Gemini quand le quota du jour est épuisé. Tout passe par une seule interface (`src/lib/llm.ts`) : changer de modèle ou de fournisseur ne touche ni aux prompts ni à la vérification. |
 | Vérification | **Code déterministe** (regex + normalisation numérique), sans LLM | On ne demande pas au modèle de noter son propre travail. |
 | Planification | Cron Vercel chaque nuit à 00:05 UTC sur `/api/cron` (protégé par `CRON_SECRET`) | Synchronise, puis rédige les synthèses arrivées à échéance : voir [Génération automatique des synthèses](#génération-automatique-des-synthèses). |
 | Accès | Code partagé (`ACCESS_PASSWORD`), cookie httpOnly contenant un HMAC du code | Assez pour un exercice : protège les quotas sans gérer de comptes. Vérifié côté serveur dans chaque route API, pas seulement masqué dans l'interface. |
 | Thème | Palettes Tailwind v4 inversées en mode sombre (`globals.css`) | Les couleurs Tailwind sont des variables CSS : inverser les nuances (50↔950…) sous `.dark` adapte toute l'interface sans ajouter une seule classe `dark:`. |
+
+**Gemini pour le coût, Claude pour le produit.** Gemini a été retenu parce que son offre gratuite permet de faire tourner l'exercice sans dépenser un centime. Pour un vrai produit, je choisirais **Claude** (Anthropic), pour plusieurs raisons :
+
+- la qualité rédactionnelle en français et le respect des consignes (ne pas calculer, ne pas arrondir, citer ses sources) ;
+- l'API de **citations**, qui rattache chaque phrase à un passage précis du PDF et rendrait la vérification sémantique beaucoup plus simple ;
+- la stabilité d'un service payant : pas de quota de 20 requêtes par jour, pas de modèle retiré aux nouveaux utilisateurs du jour au lendemain, ce qui nous est arrivé avec `gemini-2.5-flash`.
+
+La migration se limite au fichier `src/lib/llm.ts`.
 
 La génération se fait **une publication par requête HTTP** : le bouton enchaîne les appels côté client. Chaque appel reste ainsi sous la limite de durée d'une fonction serverless, et un échec n'empêche pas les autres brèves.
 
@@ -49,7 +57,7 @@ La génération se fait **une publication par requête HTTP** : le bouton encha�
 src/lib/amf.ts       client API Opendatasoft + normalisation des enregistrements
 src/lib/scoring.ts   score éditorial, détection des doublons FR/EN, sélection
 src/lib/pdf.ts       téléchargement et extraction de texte
-src/lib/llm.ts       fournisseurs LLM (Gemini par défaut, Claude en option), sortie structurée
+src/lib/llm.ts       appel LLM (Gemini), sortie structurée, bascule entre modèles
 src/lib/brief.ts     prompt + assemblage de la brève et de son statut
 src/lib/numbers.ts   extraction et vérification des chiffres
 src/lib/store.ts     Supabase / fichier JSON
@@ -214,7 +222,7 @@ why_it_matters explique l'enjeu de manière factuelle. Pas de recommandation d'a
 ## Idées d'amélioration (avec plus de temps)
 
 - **Vérification sémantique** : en plus du contrôle numérique, extraire des triplets (métrique, période, valeur) de la brève et du document, puis vérifier l'attribution, pas seulement la présence. Les *citations* de l'API Claude (passer le PDF en bloc `document` avec `citations: enabled`) donneraient en plus un passage source pour chaque phrase.
-- **Choix du modèle** : comparer Gemini Flash et Claude sur un même jeu de publications, en mesurant le taux de chiffres introuvables et la qualité rédactionnelle. L'interface `llm.ts` le permet déjà.
+- **Passer à Claude** : remplacer Gemini par Claude dans `llm.ts`, puis mesurer l'écart sur un même jeu de publications annotées (taux de chiffres introuvables, respect des consignes, qualité rédactionnelle). Les citations de l'API Claude serviraient aussi de base à la vérification sémantique.
 - **Sélection** : apprendre les poids du score à partir de ce que la rédaction publie réellement (feedback « publié / ignoré ») ; ajouter des signaux de marché (variation du cours, capitalisation) et de nouveauté (premier communiqué sur le sujet vs relance) ; regrouper les dépôts multiples d'un même événement (communiqué, présentation, rapport).
 - **Fiabilité de l'ingestion** : ingestion incrémentale par curseur de date, gestion des mises à jour (`inf_upg_sts` ≠ `NEW`), OCR pour les PDF scannés, référentiel des émetteurs (ISIN / LEI) pour corriger les noms.
 - **Workflow rédactionnel** : édition de la brève dans l'interface, avec revérification en direct à chaque modification ; statut publié / rejeté ; historique des versions ; alertes temps réel sur les informations privilégiées des valeurs suivies.
@@ -234,7 +242,7 @@ why_it_matters explique l'enjeu de manière factuelle. Pas de recommandation d'a
 | **Thème clair / sombre** | Automatique selon le système, ou au choix ; une seule règle CSS grâce à l'inversion des palettes. |
 | **Contrôle des chiffres visible** | Chaque chiffre est surligné en vert, bleu ou rouge dans les brèves et les synthèses, avec l'extrait exact du PDF où il a été trouvé. |
 | **Classement sans IA** | Les publications les plus marquantes de chaque période restent consultables même sans synthèse rédigée. |
-| **LLM interchangeable et résilient** | Gemini (gratuit) ou Claude selon `LLM_PROVIDER`, avec bascule automatique vers un autre modèle Gemini quand le quota du jour est épuisé. |
+| **LLM résilient** | Bascule automatique vers un autre modèle Gemini quand le quota gratuit du jour est épuisé ou qu'un modèle n'est plus disponible ; fournisseur isolé dans un seul fichier. |
 | **Doublons FR/EN fusionnés** | 126 versions anglaises sur 356 publications regroupées avec leur original français. |
 | **Page « Méthode »** | Critère de sélection et méthode de vérification expliqués aux utilisateurs dans l'application. |
 | **Tests et outils** | 14 tests (vérificateur de chiffres, planification). Scripts CLI : ingestion, historique, brèves, synthèses, simulation du job de nuit, recherche dans un PDF source. |
