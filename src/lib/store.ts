@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { promises as fs } from "fs";
 import path from "path";
-import type { Brief, Publication, PublicationFilters, Report } from "./types";
+import type { Summary, Publication, PublicationFilters, Report } from "./types";
 
 /**
  * Storage: Supabase (Postgres) when SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are set,
@@ -12,9 +12,9 @@ export interface Store {
   listPublications(f: PublicationFilters): Promise<Publication[]>;
   getPublication(id: string): Promise<Publication | null>;
   facets(): Promise<{ companies: string[]; types: string[]; subtypes: string[] }>;
-  saveBrief(b: Brief): Promise<void>;
-  listBriefs(): Promise<Brief[]>;
-  getBriefByPublication(id: string): Promise<Brief | null>;
+  saveSummary(b: Summary): Promise<void>;
+  listSummaries(): Promise<Summary[]>;
+  getSummaryByPublication(id: string): Promise<Summary | null>;
   /** Most newsworthy, non-duplicate publications of [from, to] (YYYY-MM-DD, inclusive). */
   topPublications(from: string, to: string, minScore: number, limit: number): Promise<Publication[]>;
   countPublications(from: string, to: string): Promise<number>;
@@ -44,7 +44,7 @@ class FileStore implements Store {
   private file = path.join(process.cwd(), ".data", "db.json");
   private async read(): Promise<{
     publications: Record<string, Publication>;
-    briefs: Record<string, Brief>;
+    briefs: Record<string, Summary>;
     reports: Record<string, Report>;
   }> {
     try {
@@ -80,15 +80,15 @@ class FileStore implements Store {
       subtypes: uniqSorted(ps.map((p) => p.subtype)),
     };
   }
-  async saveBrief(b: Brief) {
+  async saveSummary(b: Summary) {
     const db = await this.read();
     db.briefs[b.publicationId] = b;
     await this.write(db);
   }
-  async listBriefs() {
+  async listSummaries() {
     return Object.values((await this.read()).briefs).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
-  async getBriefByPublication(id: string) {
+  async getSummaryByPublication(id: string) {
     return (await this.read()).briefs[id] ?? null;
   }
   async topPublications(from: string, to: string, minScore: number, limit: number) {
@@ -214,7 +214,7 @@ class SupabaseStore implements Store {
       subtypes: uniqSorted(rows.map((r) => r.subtype)),
     };
   }
-  async saveBrief(b: Brief) {
+  async saveSummary(b: Summary) {
     this.check(
       await this.db.from("briefs").upsert(
         {
@@ -228,16 +228,16 @@ class SupabaseStore implements Store {
       ),
     );
   }
-  async listBriefs() {
+  async listSummaries() {
     const rows = this.check(
       await this.db.from("briefs").select("data").order("created_at", { ascending: false }),
-    ) as { data: Brief }[];
+    ) as { data: Summary }[];
     return rows.map((r) => r.data);
   }
-  async getBriefByPublication(id: string) {
+  async getSummaryByPublication(id: string) {
     const r = this.check(
       await this.db.from("briefs").select("data").eq("publication_id", id).maybeSingle(),
-    ) as { data: Brief } | null;
+    ) as { data: Summary } | null;
     return r?.data ?? null;
   }
   private range<Q extends { gte(column: string, value: string): Q; lt(column: string, value: string): Q }>(q: Q, from: string, to: string) {

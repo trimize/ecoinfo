@@ -1,12 +1,14 @@
-# EcoInfo : brèves d'actualité fiables à partir des publications AMF
+# EcoInfo : résumés d'actualité fiables à partir des publications AMF
 
 Petite application full stack qui :
 
 1. récupère les publications réglementées des derniers jours depuis l'open data info-financière (AMF) ;
 2. les stocke et les affiche dans une liste filtrable (société, type, sous-type, dates) ;
 3. sélectionne automatiquement celles qui méritent un article, avec un score explicable ;
-4. génère avec un LLM une brève de 100 à 150 mots (titre, faits clés, chiffres, lien source) ;
-5. vérifie que chaque chiffre de la brève figure dans le PDF source, et signale ceux qui n'y sont pas.
+4. génère avec un LLM un résumé de 100 à 150 mots (titre, faits clés, chiffres, lien source) ;
+5. vérifie que chaque chiffre du résumé figure dans le PDF source, et signale ceux qui n'y sont pas.
+
+> **Vocabulaire** : l'énoncé parle de « brève », terme de presse pour une courte dépêche factuelle sur un seul fait. Dans l'application et ce README, on parle de **résumé** : un texte de 100 à 150 mots sur une seule publication AMF. À ne pas confondre avec une **synthèse**, qui couvre tous les événements importants d'un jour, d'un mois ou d'une année.
 
 Les 5 fonctionnalités demandées sont toutes livrées. Les ajouts au-delà de l'énoncé sont listés dans [Fonctionnalités ajoutées hors énoncé](#fonctionnalités-ajoutées-hors-énoncé).
 
@@ -18,11 +20,11 @@ Les 5 fonctionnalités demandées sont toutes livrées. Les ajouts au-delà de l
 ```bash
 npm install
 cp .env.example .env.local   # renseigner GEMINI_API_KEY (gratuite : https://aistudio.google.com/apikey)
-npm run dev                  # http://localhost:3000, puis « Synchroniser » et « Générer les brèves »
+npm run dev                  # http://localhost:3000, puis « Synchroniser » et « Générer les résumés »
 npm run ingest -- 5          # (alternative CLI) ingestion des 5 derniers jours
 npm run backfill -- 2026-01-01   # historique pour les synthèses mensuelles / annuelles
 npm run report -- month 2026-10  # synthèse d'une période (day AAAA-MM-JJ | month AAAA-MM | year AAAA)
-npm run generate             # brèves des publications retenues
+npm run generate             # résumés des publications retenues
 npm run cron-plan -- 2026-12-01T00:05:00Z   # simulation du job de nuit (sans appel LLM)
 npm test                     # tests du contrôle des chiffres
 npm run check-figures -- <url_pdf> "texte à vérifier"   # outil de debug du contrôle
@@ -34,7 +36,7 @@ Sans variables Supabase, les données sont stockées dans `.data/db.json`, ce qu
 
 | Besoin | Choix | Pourquoi |
 |---|---|---|
-| Front + API | **Next.js 15 (App Router) + React 19 + Tailwind** | Un seul déploiement Vercel. Les pages sont des Server Components qui lisent la base directement ; deux routes API (`/api/ingest`, `/api/briefs`). |
+| Front + API | **Next.js 15 (App Router) + React 19 + Tailwind** | Un seul déploiement Vercel. Les pages sont des Server Components qui lisent la base directement ; routes API (`/api/ingest`, `/api/resumes`, `/api/reports`, `/api/cron`). |
 | Stockage | **Supabase (Postgres)**, avec un fallback fichier JSON | Upsert idempotent sur l'identifiant AMF, filtres indexés. Le fallback local évite toute configuration pour essayer le projet. |
 | Extraction PDF | **unpdf** (pdf.js) | Fonctionne en serverless, sans binaire natif. |
 | LLM | **Google Gemini 3.8 Flash** (`@google/genai`), offre gratuite | Choisi **uniquement pour le coût** : gratuit pour un exercice. La sortie JSON est contrainte par un schéma généré depuis Zod, puis revalidée par Zod. Les erreurs 429/503 de l'offre gratuite sont relancées, puis le client bascule sur un autre modèle Gemini quand le quota du jour est épuisé. Tout passe par une seule interface (`src/lib/llm.ts`) : changer de modèle ou de fournisseur ne touche ni aux prompts ni à la vérification. |
@@ -51,19 +53,19 @@ Sans variables Supabase, les données sont stockées dans `.data/db.json`, ce qu
 
 La migration se limite au fichier `src/lib/llm.ts`.
 
-La génération se fait **une publication par requête HTTP** : le bouton enchaîne les appels côté client. Chaque appel reste ainsi sous la limite de durée d'une fonction serverless, et un échec n'empêche pas les autres brèves.
+La génération se fait **une publication par requête HTTP** : le bouton enchaîne les appels côté client. Chaque appel reste ainsi sous la limite de durée d'une fonction serverless, et un échec n'empêche pas les autres résumés.
 
 ```
 src/lib/amf.ts       client API Opendatasoft + normalisation des enregistrements
 src/lib/scoring.ts   score éditorial, détection des doublons FR/EN, sélection
 src/lib/pdf.ts       téléchargement et extraction de texte
 src/lib/llm.ts       appel LLM (Gemini), sortie structurée, bascule entre modèles
-src/lib/brief.ts     prompt + assemblage de la brève et de son statut
+src/lib/summary.ts   prompt + assemblage du résumé et de son statut
 src/lib/numbers.ts   extraction et vérification des chiffres
 src/lib/store.ts     Supabase / fichier JSON
 src/lib/reports.ts   synthèses jour / mois / année : candidats, prompt, contrôle des sources et des chiffres
 src/lib/auth.ts      plan « Pro » (code d'accès partagé)
-src/app/             pages (synthèses, publications, fiche, brèves, méthode, abonnement) et routes API
+src/app/             pages (synthèses, publications, fiche, résumés, méthode, abonnement) et routes API
 ```
 
 ## Comprendre la structure des données
@@ -121,11 +123,11 @@ Le principe est que **le LLM rédige, du code vérifie.**
 2. **En aval, par un contrôle déterministe** (`src/lib/numbers.ts`) :
    - tous les nombres du titre, du corps et des faits clés sont extraits, ainsi que leur unité (%, milliers, millions, milliards, en FR et en EN) ;
    - le texte du PDF est normalisé : espaces insécables, espaces fines et signes moins typographiques. Chaque nombre y est lu dans les deux notations, et un jeton ambigu (`1,234`) donne deux candidats ;
-   - chaque chiffre de la brève reçoit l'un des statuts suivants :
+   - chaque chiffre du résumé reçoit l'un des statuts suivants :
      - **trouvé** : même valeur et même unité ; ou conversion exacte (`1 milliard` = `€1 000 millions`) ; ou cellule de tableau sans unité **écrite avec la même précision** ;
      - **arrondi** : le document contient une valeur plus précise qui s'arrondit au chiffre écrit (`4,08 %` ← `4,084 %`, `1,3 Md$` ← `$1,297 million`) ;
-     - **introuvable** : le chiffre est surligné en rouge, et la brève passe en « à relire ».
-   - la brève est aussi marquée « à relire » si elle sort de la plage 100–150 mots ou si le document a été tronqué ;
+     - **introuvable** : le chiffre est surligné en rouge, et le résumé passe en « à relire ».
+   - le résumé est aussi marqué « à relire » s'il sort de la plage 100–150 mots ou si le document a été tronqué ;
    - un PDF sans texte extractible (scanné) n'est pas envoyé au LLM : statut « non vérifiable ».
 3. **Dans l'interface** : chaque chiffre est coloré (vert, bleu ou rouge). Un tableau dépliable affiche, pour chaque chiffre, **l'extrait exact du document** où il a été trouvé, ce qui permet au rédacteur de valider en un coup d'œil.
 
@@ -143,9 +145,9 @@ C'est la page d'accueil, car c'est ce qu'un utilisateur veut voir en premier : *
 
 Les synthèses sont construites pour être **adossées à des documents**, à trois niveaux :
 
-1. **Liste fermée de sources** : le LLM ne reçoit que les publications les plus marquantes de la période. Elles sont choisies par le même score que les brèves, sans doublons FR/EN, avec 2 à 4 publications par société au maximum (25 pour un jour, 50 pour un mois, 80 pour une année). Pour chacune, il reçoit son titre et, si elle existe, sa brève déjà vérifiée. Chaque publication porte un identifiant.
-2. **Citations obligatoires et contrôlées** : chaque événement doit citer les identifiants de ses sources. Le code écarte tout événement qui ne cite aucune source connue, et ne garde que les identifiants qui existent : un lien inventé est impossible. À l'écran, chaque événement liste ses sources, avec un lien vers la fiche, le PDF AMF et le badge « brève vérifiée » quand il y en a une.
-3. **Chiffres vérifiés source par source** : le vérificateur des brèves est réutilisé, mais il compare chaque événement **uniquement au texte des sources qu'il cite**. Un chiffre vrai ailleurs mais attribué au mauvais événement est donc signalé. La vue d'ensemble ne doit contenir aucun chiffre.
+1. **Liste fermée de sources** : le LLM ne reçoit que les publications les plus marquantes de la période. Elles sont choisies par le même score que les résumés, sans doublons FR/EN, avec 2 à 4 publications par société au maximum (25 pour un jour, 50 pour un mois, 80 pour une année). Pour chacune, il reçoit son titre et, s'il existe, son résumé déjà vérifié. Chaque publication porte un identifiant.
+2. **Citations obligatoires et contrôlées** : chaque événement doit citer les identifiants de ses sources. Le code écarte tout événement qui ne cite aucune source connue, et ne garde que les identifiants qui existent : un lien inventé est impossible. À l'écran, chaque événement liste ses sources, avec un lien vers la fiche, le PDF AMF et le badge « résumé vérifié » quand il y en a un.
+3. **Chiffres vérifiés source par source** : le vérificateur des résumés est réutilisé, mais il compare chaque événement **uniquement au texte des sources qu'il cite**. Un chiffre vrai ailleurs mais attribué au mauvais événement est donc signalé. La vue d'ensemble ne doit contenir aucun chiffre.
 
 Pour aider à la décision, chaque événement a un « pourquoi c'est important » et une tonalité pour la société concernée (positif, négatif, neutre, mixte). Le prompt interdit toute recommandation d'achat ou de vente et toute prévision de cours. La colonne de droite montre le **classement automatique sans IA** des mêmes sources : il reste disponible quand aucune synthèse n'a encore été rédigée.
 
@@ -170,10 +172,10 @@ Données : l'historique 2026 (20 959 publications) a été chargé avec `npm run
 
 ## 3 prompts clés
 
-**1. Prompt système de rédaction** (`src/lib/brief.ts`) :
+**1. Prompt système de rédaction** (`src/lib/summary.ts`) :
 
 ```
-Tu es journaliste financier. Tu rédiges des brèves d'actualité boursière à partir d'un communiqué réglementé déposé auprès de l'AMF.
+Tu es journaliste financier. Tu rédiges des résumés d'actualité boursière à partir d'un communiqué réglementé déposé auprès de l'AMF.
 
 Règles impératives :
 - Uniquement des informations présentes dans le document fourni. Aucune connaissance extérieure, aucun cours de bourse, aucune comparaison non citée dans le document.
@@ -186,14 +188,14 @@ Règles impératives :
 - Corps de texte : 100 à 150 mots, un ou deux paragraphes, sans titre ni liste.
 ```
 
-La notation française imposée n'est pas qu'un choix de style : elle rend le parsing des chiffres de la brève **non ambigu** pour le vérificateur.
+La notation française imposée n'est pas qu'un choix de style : elle rend le parsing des chiffres du résumé **non ambigu** pour le vérificateur.
 
 **2. Prompt utilisateur** : métadonnées AMF et texte du document entre balises, avec une sortie contrainte par un schéma Zod (`title`, `body`, `key_facts`) :
 
 ```
 <metadata>Société / Titre du dépôt / Catégorie AMF / Date</metadata>
 <document>…texte extrait du PDF…</document>
-Rédige la brève (titre, corps de 100 à 150 mots, 3 à 5 faits clés chiffrés quand c'est possible).
+Rédige le résumé (titre, corps de 100 à 150 mots, 3 à 5 faits clés chiffrés quand c'est possible).
 ```
 
 **3. Prompt système des synthèses** (`src/lib/reports.ts`, extrait) :
@@ -201,7 +203,7 @@ Rédige la brève (titre, corps de 100 à 150 mots, 3 à 5 faits clés chiffrés
 ```
 Tu n'utilises QUE les publications fournies. Aucune connaissance extérieure, aucun cours de bourse, aucun événement absent de la liste.
 Chaque événement cite dans source_ids les identifiants exacts (attribut id) des publications qui le fondent. Un événement sans source n'existe pas.
-Un chiffre ne peut apparaître que s'il figure dans le titre ou la brève d'une publication citée par cet événement ; recopie-le sans calcul, arrondi ni conversion. Dans la vue d'ensemble, aucun chiffre, ni en chiffres ni en toutes lettres.
+Un chiffre ne peut apparaître que s'il figure dans le titre ou le résumé d'une publication citée par cet événement ; recopie-le sans calcul, arrondi ni conversion. Dans la vue d'ensemble, aucun chiffre, ni en chiffres ni en toutes lettres.
 Regroupe les publications qui traitent du même sujet en un seul événement. Classe les événements du plus au moins important pour un investisseur ou un dirigeant.
 why_it_matters explique l'enjeu de manière factuelle. Pas de recommandation d'achat ou de vente, pas de prévision de cours.
 ```
@@ -212,20 +214,20 @@ why_it_matters explique l'enjeu de manière factuelle. Pas de recommandation d'a
 
 ## Erreurs de l'IA détectées
 
-1. **Faux positifs du vérificateur** (le code généré par l'IA). La première version acceptait un nombre de la brève dès que la même valeur apparaissait **sans unité** dans le PDF. Sur le communiqué Schneider, « 6,0 milliards » était validé par le **« 6 » du numéro de téléphone** (`+33 6 79 11 49 71`), et « 1 milliard » par **« Page | 1 »**. Je l'ai repéré en testant volontairement des chiffres faux, puis corrigé : stratégies ordonnées (même unité, puis conversion exacte, puis cellule sans unité seulement avec une précision identique), avec des tests de non-régression.
+1. **Faux positifs du vérificateur** (le code généré par l'IA). La première version acceptait un nombre du résumé dès que la même valeur apparaissait **sans unité** dans le PDF. Sur le communiqué Schneider, « 6,0 milliards » était validé par le **« 6 » du numéro de téléphone** (`+33 6 79 11 49 71`), et « 1 milliard » par **« Page | 1 »**. Je l'ai repéré en testant volontairement des chiffres faux, puis corrigé : stratégies ordonnées (même unité, puis conversion exacte, puis cellule sans unité seulement avec une précision identique), avec des tests de non-régression.
 2. **Regex de scoring sans frontière de mot**. Le motif « révision de perspectives » contenait `cut`, qui correspondait à « exé**cut**ion ». Tout titre mentionnant « difficultés d'exécution » gagnait +15 à tort. Corrigé avec un lookbehind Unicode `(?<!\p{L})`.
 3. **Mauvaise attente dans un test écrit par l'IA**. Un test affirmait que « 6 milliards » devait être introuvable, alors que le document contient « 6,0 milliards » : c'est bien la même valeur. Ici c'est le code qui avait raison et le test qui avait tort, ce qui rappelle que les tests générés se relisent aussi.
-4. **Erreur du LLM, provoquée par mon prompt** (Gemini 3.8 Flash, brève Alstom). La consigne « recopie chaque chiffre tel qu'il apparaît » a été suivie à la lettre : la brève écrivait « une marge d'exploitation ajustée d'environ **(4) %** » et « un cash-flow libre de **(1 248) millions d'euros** », en reprenant la notation comptable des négatifs entre parenthèses. Le contrôle automatique l'a validée, puisque les chiffres sont bien dans le document, mais un lecteur grand public ne comprend pas cette notation. Corrigé par une règle explicite dans le prompt système. C'est aussi une limite du vérificateur : il ignore le signe, et il ne pouvait donc rien signaler.
-5. **Ce que le vérificateur ne voit pas, contrôlé à la main.** Sur les 3 premières brèves (Alstom 16/16, Sanofi 13/13, Crédit Agricole 20/20 chiffres trouvés), j'ai vérifié l'*attribution* de chaque chiffre dans le PDF (`scripts/source-grep.ts`) : aucune erreur de métrique ni de période. Par exemple, pour Crédit Agricole, le modèle a bien distingué le +17,9 % publié du +11,0 % retraité, et les chiffres de Crédit Agricole S.A. de ceux du Groupe Crédit Agricole. Ce contrôle manuel est exactement ce que la « vérification sémantique » des pistes d'amélioration automatiserait.
+4. **Erreur du LLM, provoquée par mon prompt** (Gemini 3.8 Flash, résumé Alstom). La consigne « recopie chaque chiffre tel qu'il apparaît » a été suivie à la lettre : le résumé écrivait « une marge d'exploitation ajustée d'environ **(4) %** » et « un cash-flow libre de **(1 248) millions d'euros** », en reprenant la notation comptable des négatifs entre parenthèses. Le contrôle automatique l'a validée, puisque les chiffres sont bien dans le document, mais un lecteur grand public ne comprend pas cette notation. Corrigé par une règle explicite dans le prompt système. C'est aussi une limite du vérificateur : il ignore le signe, et il ne pouvait donc rien signaler.
+5. **Ce que le vérificateur ne voit pas, contrôlé à la main.** Sur les 3 premiers résumés (Alstom 16/16, Sanofi 13/13, Crédit Agricole 20/20 chiffres trouvés), j'ai vérifié l'*attribution* de chaque chiffre dans le PDF (`scripts/source-grep.ts`) : aucune erreur de métrique ni de période. Par exemple, pour Crédit Agricole, le modèle a bien distingué le +17,9 % publié du +11,0 % retraité, et les chiffres de Crédit Agricole S.A. de ceux du Groupe Crédit Agricole. Ce contrôle manuel est exactement ce que la « vérification sémantique » des pistes d'amélioration automatiserait.
 6. **Le LLM contourne une règle plutôt que de la respecter** (synthèse du 30/10/2026). Le prompt interdisait les chiffres dans la vue d'ensemble. Le modèle a écrit « CAC 40 » dans le titre, et **« CAC quarante » en toutes lettres** dans la vue d'ensemble. Le vérificateur a signalé le « 40 » du titre : c'était une fausse alerte (un nom d'indice, pas un chiffre), mais elle a révélé le contournement. Deux corrections : les noms d'indices (CAC 40, SBF 120…) sont exclus du contrôle, avec un test dédié, et le prompt interdit désormais les nombres « ni en chiffres ni en toutes lettres ». Leçon : une règle de prompt se vérifie dans les sorties, elle ne se suppose pas respectée.
 
 ## Idées d'amélioration (avec plus de temps)
 
-- **Vérification sémantique** : en plus du contrôle numérique, extraire des triplets (métrique, période, valeur) de la brève et du document, puis vérifier l'attribution, pas seulement la présence. Les *citations* de l'API Claude (passer le PDF en bloc `document` avec `citations: enabled`) donneraient en plus un passage source pour chaque phrase.
+- **Vérification sémantique** : en plus du contrôle numérique, extraire des triplets (métrique, période, valeur) du résumé et du document, puis vérifier l'attribution, pas seulement la présence. Les *citations* de l'API Claude (passer le PDF en bloc `document` avec `citations: enabled`) donneraient en plus un passage source pour chaque phrase.
 - **Passer à Claude** : remplacer Gemini par Claude dans `llm.ts`, puis mesurer l'écart sur un même jeu de publications annotées (taux de chiffres introuvables, respect des consignes, qualité rédactionnelle). Les citations de l'API Claude serviraient aussi de base à la vérification sémantique.
 - **Sélection** : apprendre les poids du score à partir de ce que la rédaction publie réellement (feedback « publié / ignoré ») ; ajouter des signaux de marché (variation du cours, capitalisation) et de nouveauté (premier communiqué sur le sujet vs relance) ; regrouper les dépôts multiples d'un même événement (communiqué, présentation, rapport).
 - **Fiabilité de l'ingestion** : ingestion incrémentale par curseur de date, gestion des mises à jour (`inf_upg_sts` ≠ `NEW`), OCR pour les PDF scannés, référentiel des émetteurs (ISIN / LEI) pour corriger les noms.
-- **Workflow rédactionnel** : édition de la brève dans l'interface, avec revérification en direct à chaque modification ; statut publié / rejeté ; historique des versions ; alertes temps réel sur les informations privilégiées des valeurs suivies.
+- **Workflow rédactionnel** : édition du résumé dans l'interface, avec revérification en direct à chaque modification ; statut publié / rejeté ; historique des versions ; alertes temps réel sur les informations privilégiées des valeurs suivies.
 - **Évaluation** : constituer un jeu d'environ 50 publications annotées pour mesurer le taux de chiffres introuvables et la qualité éditoriale selon le prompt et le modèle.
 - **Sécurité** : remplacer le code partagé par de vrais comptes (Supabase Auth), avec un quota par utilisateur et une limitation de débit sur `/api/auth`.
 - **Synthèses** : comparer avec la période précédente (« ce qui a changé depuis le mois dernier »), filtrer par secteur ou par liste de valeurs suivies, et envoyer la synthèse du jour par e-mail chaque matin.
@@ -240,12 +242,12 @@ why_it_matters explique l'enjeu de manière factuelle. Pas de recommandation d'a
 | **Historique 2026 complet** | 20 959 publications chargées par le point d'accès `/exports`, pour des synthèses mensuelles et annuelles réelles. |
 | **Plan « Pro Recruteur »** | Code d'accès partagé, vérifié côté serveur, qui protège les actions consommant des quotas. Les visiteurs lisent tout librement. Page d'abonnement humoristique (« facturé en une seule fois : une offre d'emploi »). |
 | **Thème clair / sombre** | Automatique selon le système, ou au choix ; une seule règle CSS grâce à l'inversion des palettes. |
-| **Contrôle des chiffres visible** | Chaque chiffre est surligné en vert, bleu ou rouge dans les brèves et les synthèses, avec l'extrait exact du PDF où il a été trouvé. |
+| **Contrôle des chiffres visible** | Chaque chiffre est surligné en vert, bleu ou rouge dans les résumés et les synthèses, avec l'extrait exact du PDF où il a été trouvé. |
 | **Classement sans IA** | Les publications les plus marquantes de chaque période restent consultables même sans synthèse rédigée. |
 | **LLM résilient** | Bascule automatique vers un autre modèle Gemini quand le quota gratuit du jour est épuisé ou qu'un modèle n'est plus disponible ; fournisseur isolé dans un seul fichier. |
 | **Doublons FR/EN fusionnés** | 126 versions anglaises sur 356 publications regroupées avec leur original français. |
 | **Page « Méthode »** | Critère de sélection et méthode de vérification expliqués aux utilisateurs dans l'application. |
-| **Tests et outils** | 14 tests (vérificateur de chiffres, planification). Scripts CLI : ingestion, historique, brèves, synthèses, simulation du job de nuit, recherche dans un PDF source. |
+| **Tests et outils** | 14 tests (vérificateur de chiffres, planification). Scripts CLI : ingestion, historique, résumés, synthèses, simulation du job de nuit, recherche dans un PDF source. |
 | **Sécurité** | Next.js et React mis à jour contre la CVE-2025-55182 (React2Shell). Fonctionnement « fermé par défaut » si le code d'accès manque en production. |
 
 ## Temps passé

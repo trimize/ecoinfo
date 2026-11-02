@@ -70,7 +70,7 @@ export function SyncButton({ pro }: { pro: boolean }) {
   );
 }
 
-/** Generates briefs one publication per request (keeps each serverless call short). */
+/** Generates summaries one publication per request (keeps each serverless call short). */
 export function GenerateButton({ ids, label, pro }: { ids: string[]; label: string; pro: boolean }) {
   const router = useRouter();
   const [progress, setProgress] = useState<string | null>(null);
@@ -86,7 +86,7 @@ export function GenerateButton({ ids, label, pro }: { ids: string[]; label: stri
           const errors: string[] = [];
           for (let i = 0; i < ids.length; i++) {
             setProgress(`${i + 1}/${ids.length}…`);
-            const res = await fetch("/api/briefs", {
+            const res = await fetch("/api/resumes", {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ publicationId: ids[i] }),

@@ -22,14 +22,14 @@ export interface Publication {
 export type FigureStatus = "verified" | "rounded" | "not_found";
 
 export interface FigureCheck {
-  raw: string; // as written in the brief, e.g. "1,2 Md€"
+  raw: string; // as written in the summary, e.g. "1,2 Md€"
   normalized: number;
   status: FigureStatus;
   evidence: string | null; // excerpt of the source around the match
   matchedAs: string | null; // which source token / conversion matched
 }
 
-export interface Brief {
+export interface Summary {
   id: string;
   publicationId: string;
   title: string;

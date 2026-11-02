@@ -1,7 +1,7 @@
 import type { FigureCheck } from "./types";
 
 /**
- * Deterministic figure checking: every number written in a brief must be found in the text
+ * Deterministic figure checking: every number written in a summary must be found in the text
  * extracted from the source PDF. No LLM is involved in this step, on purpose: we do not ask the
  * model to grade its own work.
  *
@@ -10,9 +10,9 @@ import type { FigureCheck } from "./types";
  * - The unit right after the number is captured: %, thousand / million / billion (FR + EN).
  * - "verified": same value, compatible unit (a % must match a %; "6,0 milliards" may match a
  *   bare "6,0" from a table, since tables give the unit in the header).
- * - "rounded": the source has an explicitly scaled figure that rounds to the brief's figure
- *   (e.g. brief "1,3 milliard" vs source "1 297 M€"), or a more precise value in the same unit.
- * - "not_found": anything else -> the brief is flagged for human review.
+ * - "rounded": the source has an explicitly scaled figure that rounds to the summary's figure
+ *   (e.g. summary "1,3 milliard" vs source "1 297 M€"), or a more precise value in the same unit.
+ * - "not_found": anything else -> the summary is flagged for human review.
  */
 
 export interface NumToken {
@@ -112,9 +112,9 @@ function excerpt(text: string, index: number, len: number) {
   return (start > 0 ? "…" : "") + text.slice(start, end).replace(/\s+/g, " ").trim() + (end < text.length ? "…" : "");
 }
 
-/** Brief figures are written by our prompt in French notation, so parse them unambiguously. */
+/** Summary figures are written by our prompt in French notation, so parse them unambiguously. */
 function parseBriefToken(t: NumToken) {
-  // the brief uses spaces for thousands and a comma for decimals
+  // the summary uses spaces for thousands and a comma for decimals
   const r = t.raw.replace(/ /g, "");
   if (/^\d+,\d+$/.test(r)) {
     const [i, d] = r.split(",");
@@ -125,21 +125,21 @@ function parseBriefToken(t: NumToken) {
 }
 
 const unitSuffix = (t: NumToken) => (t.pct ? " %" : t.scale === 1e9 ? " Md" : t.scale === 1e6 ? " M" : t.scale === 1e3 ? " k" : "");
-/** Stable label of a brief figure, used to link highlighted text to its check. */
+/** Stable label of a summary figure, used to link highlighted text to its check. */
 export const figureLabel = (t: NumToken) => t.raw + unitSuffix(t);
 
 /** Stock-index names contain digits but are not figures to verify. */
 export const INDEX_NAMES = /\b(CAC|SBF|Euro ?Stoxx|Stoxx|CAC Mid|CAC Small|DAX|FTSE|S&P) ?\d{2,3}\b/gi;
 
-export function checkFigures(briefText: string, sourceText: string): FigureCheck[] {
+export function checkFigures(summaryText: string, sourceText: string): FigureCheck[] {
   const src = normalizeText(sourceText);
   const srcTokens = extractNumbers(src);
-  // The brief is prose: no table-cell splitting. Index names ("CAC 40") are names, not figures.
-  const briefTokens = extractNumbers(normalizeText(briefText).replace(INDEX_NAMES, (m) => m.replace(/\d/g, "#")), false);
+  // The summary is prose: no table-cell splitting. Index names ("CAC 40") are names, not figures.
+  const summaryTokens = extractNumbers(normalizeText(summaryText).replace(INDEX_NAMES, (m) => m.replace(/\d/g, "#")), false);
 
   const seen = new Set<string>();
   const results: FigureCheck[] = [];
-  for (const bt of briefTokens) {
+  for (const bt of summaryTokens) {
     const label = figureLabel(bt);
     if (seen.has(label)) continue;
     seen.add(label);
@@ -156,7 +156,7 @@ export function checkFigures(briefText: string, sourceText: string): FigureCheck
       ["verified", " (conversion d'unité exacte)", (s) => s.pct === bt.pct && s.scale !== 1 && s.scale !== bt.scale && hasValue(s, (sv) => eq(sv * s.scale, target))],
       // c. table cell without unit: only if written with the very same precision and not a trivial number
       ["verified", " (cellule sans unité)", (s) => !bt.pct && !s.pct && bt.scale !== 1 && s.scale === 1 && (d > 0 || v >= 100) && hasValue(s, (sv, sd) => eq(sv, v) && sd === d)],
-      // d. more precise source figure that rounds to the brief figure ("4,08 %" <-> "4,084 %", "1,3 Md" <-> "1 297 M")
+      // d. more precise source figure that rounds to the summary figure ("4,08 %" <-> "4,084 %", "1,3 Md" <-> "1 297 M")
       ["rounded", " (arrondi)", (s) => s.pct === bt.pct && (s.scale !== 1 || bt.scale === 1) && hasValue(s, (sv, sd) => {
         const inBriefUnit = (sv * s.scale) / bt.scale;
         const morePrecise = s.scale !== bt.scale || sd > d;

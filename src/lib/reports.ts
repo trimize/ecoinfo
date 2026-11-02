@@ -3,17 +3,17 @@ import { currentModel, generateStructured } from "./llm";
 import { checkFigures } from "./numbers";
 import { SELECTION_THRESHOLD } from "./scoring";
 import { getStore } from "./store";
-import type { Brief, FigureCheck, Period, Publication, Report, ReportEvent, ReportSource } from "./types";
+import type { Summary, FigureCheck, Period, Publication, Report, ReportEvent, ReportSource } from "./types";
 
 /**
  * Day / month / year summaries ("Synthèses").
  *
  * Grounding, in three layers:
  * 1. The model only sees a closed list of AMF publications (the most newsworthy of the period,
- *    by the same score as the brief selection), each with an id. It must cite those ids.
+ *    by the same score as the summary selection), each with an id. It must cite those ids.
  * 2. Every event citing no known id is dropped; ids are never invented into links.
- * 3. Every number of an event is checked (same deterministic checker as the briefs) against the
- *    text of the sources it cites: their titles and, when they exist, their verified briefs.
+ * 3. Every number of an event is checked (same deterministic checker as the summaries) against the
+ *    text of the sources it cites: their titles and, when they exist, their verified summaries.
  */
 
 const CANDIDATES: Record<Period, number> = { day: 25, month: 50, year: 80 };
@@ -75,15 +75,15 @@ export const REPORT_SYSTEM_PROMPT = `Tu es analyste financier et tu rédiges une
 Règles impératives :
 - Tu n'utilises QUE les publications fournies. Aucune connaissance extérieure, aucun cours de bourse, aucun événement absent de la liste.
 - Chaque événement cite dans source_ids les identifiants exacts (attribut id) des publications qui le fondent. Un événement sans source n'existe pas.
-- Un chiffre ne peut apparaître que s'il figure dans le titre ou la brève d'une publication citée par cet événement ; recopie-le sans calcul, arrondi ni conversion, en notation française (1 234,5 M€ ; 3,2 %). Dans la vue d'ensemble, aucun chiffre, ni en chiffres ni en toutes lettres.
+- Un chiffre ne peut apparaître que s'il figure dans le titre ou le résumé d'une publication citée par cet événement ; recopie-le sans calcul, arrondi ni conversion, en notation française (1 234,5 M€ ; 3,2 %). Dans la vue d'ensemble, aucun chiffre, ni en chiffres ni en toutes lettres.
 - Regroupe les publications qui traitent du même sujet en un seul événement. Classe les événements du plus au moins important pour un investisseur ou un dirigeant (ampleur, surprise, taille de la société).
 - why_it_matters explique l'enjeu de manière factuelle. Pas de recommandation d'achat ou de vente, pas de prévision de cours.
 - Ton neutre, en français.`;
 
-function sourceBlock(p: Publication, brief: Brief | null) {
-  const briefText = brief && brief.status !== "unverifiable" ? `\n  <breve>${brief.body}\n  ${brief.keyFacts.join(" | ")}</breve>` : "";
+function sourceBlock(p: Publication, summary: Summary | null) {
+  const summaryText = summary && summary.status !== "unverifiable" ? `\n  <resume>${summary.body}\n  ${summary.keyFacts.join(" | ")}</resume>` : "";
   return `<publication id="${p.id}" date="${p.publishedAt.slice(0, 10)}" societe="${p.company}"${p.cac40 ? ' cac40="oui"' : ""} categorie="${p.subtype ?? "?"}" score="${p.score}">
-  <titre>${p.title}</titre>${briefText}
+  <titre>${p.title}</titre>${summaryText}
 </publication>`;
 }
 
@@ -93,20 +93,20 @@ export async function generateReport(period: Period, key: string): Promise<Repor
   const [candidates, count] = await Promise.all([reportCandidates(period, key), store.countPublications(from, to)]);
   if (candidates.length === 0) throw new Error(`Aucune publication marquante enregistrée pour ${label}. Synchronisez la période d'abord.`);
 
-  const briefs = new Map<string, Brief | null>(
-    await Promise.all(candidates.map(async (p) => [p.id, await store.getBriefByPublication(p.id)] as const)),
+  const summaries = new Map<string, Summary | null>(
+    await Promise.all(candidates.map(async (p) => [p.id, await store.getSummaryByPublication(p.id)] as const)),
   );
   const byId = new Map(candidates.map((p) => [p.id, p]));
   const sourceText = (id: string) => {
     const p = byId.get(id)!;
-    const b = briefs.get(id);
+    const b = summaries.get(id);
     return [p.title, b?.title, b?.body, ...(b?.keyFacts ?? [])].filter(Boolean).join("\n");
   };
 
   const user = `Période : ${label} (du ${from} au ${to}). ${count} publications déposées, dont les ${candidates.length} plus marquantes ci-dessous.
 
 <publications>
-${candidates.map((p) => sourceBlock(p, briefs.get(p.id) ?? null)).join("\n")}
+${candidates.map((p) => sourceBlock(p, summaries.get(p.id) ?? null)).join("\n")}
 </publications>
 
 Rédige la synthèse : une phrase de titre, une vue d'ensemble, puis ${EVENTS[period]} événements.`;
@@ -153,7 +153,7 @@ Rédige la synthèse : une phrase de titre, une vue d'ensemble, puis ${EVENTS[pe
     pdfUrl: p.pdfUrl,
     score: p.score,
     subtype: p.subtype,
-    hasBrief: !!briefs.get(p.id),
+    hasBrief: !!summaries.get(p.id),
   }));
 
   return {

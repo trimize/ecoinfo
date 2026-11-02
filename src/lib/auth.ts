@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 
 /**
  * "Paid plan" = a shared password (ACCESS_PASSWORD). Visitors can read everything;
- * actions that call the AMF API or the LLM (sync, briefs, reports) need the Pro plan.
+ * actions that call the AMF API or the LLM (sync, summaries, reports) need the Pro plan.
  * The cookie stores an HMAC of the password, never the password itself.
  * Without ACCESS_PASSWORD: unlocked in local dev, but locked in production (fail closed).
  */

@@ -21,15 +21,15 @@ export default async function PublicationsPage({ searchParams }: { searchParams:
     hideDuplicates: sp.dups !== "1",
   };
   const store = getStore();
-  const [pubs, facets, briefs, selected, pro] = await Promise.all([
+  const [pubs, facets, summaries, selected, pro] = await Promise.all([
     store.listPublications(filters),
     store.facets(),
-    store.listBriefs(),
+    store.listSummaries(),
     store.listPublications({ selectedOnly: true }),
     isPro(),
   ]);
-  const briefed = new Set(briefs.map((b) => b.publicationId));
-  const toGenerate = selected.filter((p) => !briefed.has(p.id)).map((p) => p.id);
+  const summarized = new Set(summaries.map((b) => b.publicationId));
+  const toGenerate = selected.filter((p) => !summarized.has(p.id)).map((p) => p.id);
 
   const select = (name: string, label: string, options: string[]) => (
     <label className="flex flex-col gap-1 text-xs text-stone-500">
@@ -51,12 +51,12 @@ export default async function PublicationsPage({ searchParams }: { searchParams:
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Publications réglementées</h1>
           <p className="text-sm text-stone-500">
-            Flux AMF « flux-amf-new-prod » · {pubs.length} résultat(s) · ★ = retenue pour une brève
+            Flux AMF « flux-amf-new-prod » · {pubs.length} résultat(s) · ★ = retenue pour un résumé
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <SyncButton pro={pro} />
-          <GenerateButton ids={toGenerate} label={`Générer les brèves (${toGenerate.length})`} pro={pro} />
+          <GenerateButton ids={toGenerate} label={`Générer les résumés (${toGenerate.length})`} pro={pro} />
         </div>
       </div>
 
@@ -115,7 +115,7 @@ export default async function PublicationsPage({ searchParams }: { searchParams:
                       {p.selected && "★ "}
                       {p.title}
                     </Link>
-                    {briefed.has(p.id) && <span className="ml-2 rounded bg-emerald-100 px-1 text-[10px] text-emerald-800">brève</span>}
+                    {summarized.has(p.id) && <span className="ml-2 rounded bg-emerald-100 px-1 text-[10px] text-emerald-800">résumé</span>}
                     {p.duplicateOf && <span className="ml-2 text-[10px]">(doublon EN)</span>}
                   </td>
                   <td className="px-3 py-2 text-xs text-stone-600">{shortSubtype(p.subtype)}</td>

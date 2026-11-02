@@ -10,7 +10,7 @@ Montant Maturité Coupon Taux implicite
 Revenue of $1,297 million, up 12.4% year-on-year.
 Chiffre d'affaires (en M€) 2 345,6`;
 
-const status = (brief: string) => Object.fromEntries(checkFigures(brief, SOURCE).map((f) => [f.raw, f.status]));
+const status = (summary: string) => Object.fromEntries(checkFigures(summary, SOURCE).map((f) => [f.raw, f.status]));
 
 test("exact matches with units", () => {
   const s = status("6,0 milliards d'euros, 8,2 ans, 4,3 %");

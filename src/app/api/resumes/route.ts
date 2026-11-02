@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { requirePro } from "@/lib/auth";
-import { generateBrief } from "@/lib/brief";
+import { generateSummary } from "@/lib/summary";
 import { missingKey } from "@/lib/llm";
 import { getStore } from "@/lib/store";
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
-/** POST { publicationId } -> generate (or regenerate) the brief for one publication. */
+/** POST { publicationId } -> generate (or regenerate) the summary for one publication. */
 export async function POST(req: Request) {
   const denied = await requirePro();
   if (denied) return NextResponse.json(denied, { status: 402 });
@@ -19,9 +19,9 @@ export async function POST(req: Request) {
   const missing = missingKey();
   if (missing) return NextResponse.json({ error: `${missing} manquante` }, { status: 500 });
   try {
-    const brief = await generateBrief(pub);
-    await store.saveBrief(brief);
-    return NextResponse.json(brief);
+    const summary = await generateSummary(pub);
+    await store.saveSummary(summary);
+    return NextResponse.json(summary);
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }

@@ -2,15 +2,15 @@ import { z } from "zod";
 import { currentModel, generateStructured } from "./llm";
 import { checkFigures } from "./numbers";
 import { fetchPdfText } from "./pdf";
-import type { Brief, Publication } from "./types";
+import type { Summary, Publication } from "./types";
 
-const BriefSchema = z.object({
+const SummarySchema = z.object({
   title: z.string().describe("Titre factuel, 12 mots maximum"),
-  body: z.string().describe("Brève de 100 à 150 mots, en français"),
+  body: z.string().describe("Résumé de 100 à 150 mots, en français"),
   key_facts: z.array(z.string()).describe("3 à 5 faits clés, une phrase courte chacun"),
 });
 
-export const SYSTEM_PROMPT = `Tu es journaliste financier. Tu rédiges des brèves d'actualité boursière à partir d'un communiqué réglementé déposé auprès de l'AMF.
+export const SYSTEM_PROMPT = `Tu es journaliste financier. Tu rédiges des résumés d'actualité boursière à partir d'un communiqué réglementé déposé auprès de l'AMF.
 
 Règles impératives :
 - Uniquement des informations présentes dans le document fourni. Aucune connaissance extérieure, aucun cours de bourse, aucune comparaison non citée dans le document.
@@ -34,12 +34,12 @@ Date de dépôt : ${p.publishedAt}
 ${sourceText}
 </document>
 
-Rédige la brève (titre, corps de 100 à 150 mots, 3 à 5 faits clés chiffrés quand c'est possible).`;
+Rédige le résumé (titre, corps de 100 à 150 mots, 3 à 5 faits clés chiffrés quand c'est possible).`;
 }
 
 const countWords = (s: string) => s.split(/\s+/).filter((w) => /[\p{L}\d]/u.test(w)).length;
 
-export async function generateBrief(p: Publication): Promise<Brief> {
+export async function generateSummary(p: Publication): Promise<Summary> {
   if (!p.pdfUrl) throw new Error("Pas de document source");
   const src = await fetchPdfText(p.pdfUrl);
   const base = {
@@ -52,7 +52,7 @@ export async function generateBrief(p: Publication): Promise<Brief> {
     createdAt: new Date().toISOString(),
   };
 
-  // Scanned PDF / image-only document: nothing to ground the brief on -> do not generate.
+  // Scanned PDF / image-only document: nothing to ground the summary on -> do not generate.
   if (src.text.replace(/\s/g, "").length < 300) {
     return {
       ...base,
@@ -62,11 +62,11 @@ export async function generateBrief(p: Publication): Promise<Brief> {
       wordCount: 0,
       figures: [],
       status: "unverifiable",
-      statusReason: "Texte du PDF non extractible (document scanné ?) : brève non générée, vérification impossible.",
+      statusReason: "Texte du PDF non extractible (document scanné ?) : résumé non généré, vérification impossible.",
     };
   }
 
-  const { data: out, model } = await generateStructured(BriefSchema, SYSTEM_PROMPT, buildUserPrompt(p, src.text));
+  const { data: out, model } = await generateStructured(SummarySchema, SYSTEM_PROMPT, buildUserPrompt(p, src.text));
 
   // Verify every number of title + body + key facts against the source text.
   const figures = checkFigures([out.title, out.body, ...out.key_facts].join("\n"), src.text);

@@ -11,13 +11,13 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 
 export const metadata: Metadata = {
   title: "EcoInfo · Synthèses AMF",
-  description: "Synthèses et brèves vérifiées des publications réglementées AMF (info-financiere.gouv.fr)",
+  description: "Synthèses et résumés vérifiés des publications réglementées AMF (info-financiere.gouv.fr)",
 };
 
 const NAV = [
   ["/", "Synthèses"],
   ["/publications", "Publications"],
-  ["/briefs", "Brèves"],
+  ["/resumes", "Résumés"],
   ["/methode", "Méthode"],
 ] as const;
 

@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { extractNumbers, figureLabel, normalizeText } from "@/lib/numbers";
 import { fmtDate } from "@/lib/format";
-import type { Brief, FigureCheck, Publication } from "@/lib/types";
+import type { Summary, FigureCheck, Publication } from "@/lib/types";
 
-const STATUS_STYLE: Record<Brief["status"], string> = {
+const STATUS_STYLE: Record<Summary["status"], string> = {
   verified: "bg-emerald-50 text-emerald-800 ring-emerald-200",
   needs_review: "bg-amber-50 text-amber-900 ring-amber-200",
   unverifiable: "bg-stone-100 text-stone-700 ring-stone-300",
 };
-const STATUS_LABEL: Record<Brief["status"], string> = {
+const STATUS_LABEL: Record<Summary["status"], string> = {
   verified: "Chiffres vérifiés",
   needs_review: "À relire",
   unverifiable: "Non vérifiable",
@@ -49,7 +49,7 @@ export function Highlighted({ text, figures }: { text: string; figures: FigureCh
   return <>{parts}</>;
 }
 
-export function BriefCard({ brief, pub }: { brief: Brief; pub?: Publication | null }) {
+export function SummaryCard({ summary, pub }: { summary: Summary; pub?: Publication | null }) {
   return (
     <article className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
       <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-stone-500">
@@ -59,39 +59,39 @@ export function BriefCard({ brief, pub }: { brief: Brief; pub?: Publication | nu
           </Link>
         )}
         {pub && <span>· {fmtDate(pub.publishedAt)}</span>}
-        <span className={`ml-auto rounded-full px-2 py-0.5 font-medium ring-1 ${STATUS_STYLE[brief.status]}`}>
-          {STATUS_LABEL[brief.status]}
+        <span className={`ml-auto rounded-full px-2 py-0.5 font-medium ring-1 ${STATUS_STYLE[summary.status]}`}>
+          {STATUS_LABEL[summary.status]}
         </span>
       </div>
       <h2 className="text-lg font-semibold leading-snug">
-        <Highlighted text={brief.title} figures={brief.figures} />
+        <Highlighted text={summary.title} figures={summary.figures} />
       </h2>
-      {brief.body && (
+      {summary.body && (
         <p className="mt-2 leading-relaxed text-stone-800">
-          <Highlighted text={brief.body} figures={brief.figures} />
+          <Highlighted text={summary.body} figures={summary.figures} />
         </p>
       )}
-      {brief.keyFacts.length > 0 && (
+      {summary.keyFacts.length > 0 && (
         <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-stone-700">
-          {brief.keyFacts.map((k, i) => (
+          {summary.keyFacts.map((k, i) => (
             <li key={i}>
-              <Highlighted text={k} figures={brief.figures} />
+              <Highlighted text={k} figures={summary.figures} />
             </li>
           ))}
         </ul>
       )}
       <p className="mt-3 text-sm">
-        <a href={brief.sourceUrl} target="_blank" rel="noreferrer" className="text-emerald-700 hover:underline">
+        <a href={summary.sourceUrl} target="_blank" rel="noreferrer" className="text-emerald-700 hover:underline">
           Document source (PDF) ↗
         </a>
       </p>
 
       <details className="mt-4 rounded border border-stone-200 bg-stone-50 p-3 text-sm">
         <summary className="cursor-pointer font-medium">
-          Contrôle des chiffres : {brief.statusReason}
+          Contrôle des chiffres : {summary.statusReason}
         </summary>
-        {brief.figures.length === 0 ? (
-          <p className="mt-2 text-stone-500">Aucun chiffre dans la brève.</p>
+        {summary.figures.length === 0 ? (
+          <p className="mt-2 text-stone-500">Aucun chiffre dans le résumé.</p>
         ) : (
           <table className="mt-2 w-full text-left text-xs">
             <thead className="text-stone-500">
@@ -102,7 +102,7 @@ export function BriefCard({ brief, pub }: { brief: Brief; pub?: Publication | nu
               </tr>
             </thead>
             <tbody>
-              {brief.figures.map((f) => (
+              {summary.figures.map((f) => (
                 <tr key={f.raw} className="border-t border-stone-200 align-top">
                   <td className="py-1 pr-2 font-mono whitespace-nowrap">{f.raw}</td>
                   <td className="py-1 pr-2 whitespace-nowrap">
@@ -116,8 +116,8 @@ export function BriefCard({ brief, pub }: { brief: Brief; pub?: Publication | nu
           </table>
         )}
         <p className="mt-2 text-xs text-stone-500">
-          {brief.wordCount} mots · modèle {brief.model} · {brief.sourceChars.toLocaleString("fr-FR")} caractères de source
-          {brief.sourceTruncated ? " (tronquée)" : ""} · généré le {fmtDate(brief.createdAt)}
+          {summary.wordCount} mots · modèle {summary.model} · {summary.sourceChars.toLocaleString("fr-FR")} caractères de source
+          {summary.sourceTruncated ? " (tronquée)" : ""} · généré le {fmtDate(summary.createdAt)}
         </p>
       </details>
     </article>

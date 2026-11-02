@@ -32,7 +32,7 @@ export default function MethodePage() {
 
       <h2>4. Synthèses jour / mois / année</h2>
       <ul>
-        <li>Le LLM reçoit une liste fermée : les publications les plus marquantes de la période (même score), avec leur titre et leur brève vérifiée si elle existe.</li>
+        <li>Le LLM reçoit une liste fermée : les publications les plus marquantes de la période (même score), avec leur titre et leur résumé vérifié s&apos;il existe.</li>
         <li>Chaque événement doit citer les identifiants de ses sources ; un événement sans source valide est écarté par le code.</li>
         <li>Les chiffres de chaque événement sont vérifiés uniquement contre les sources qu&apos;il cite.</li>
         <li>Aucune recommandation d&apos;achat ou de vente : la synthèse informe, la décision vous appartient.</li>
@@ -43,9 +43,9 @@ export default function MethodePage() {
         <li>Tous les nombres du titre, du corps et des faits clés sont extraits par expression régulière, avec leur unité (%, milliers, millions, milliards).</li>
         <li>Les nombres du PDF sont lus en notation française et anglaise ; un jeton ambigu (« 1,234 ») donne deux valeurs candidates.</li>
         <li><b>Trouvé</b> : même valeur et même unité, conversion exacte (1 milliard = 1 000 millions), ou cellule de tableau sans unité écrite avec la même précision.</li>
-        <li><b>Arrondi</b> : le document contient une valeur plus précise qui s&apos;arrondit au chiffre de la brève.</li>
-        <li><b>Introuvable</b> : la brève est marquée « à relire » et le chiffre surligné en rouge.</li>
-        <li>PDF sans texte extractible (scanné) : aucune brève n&apos;est générée, statut « non vérifiable ».</li>
+        <li><b>Arrondi</b> : le document contient une valeur plus précise qui s&apos;arrondit au chiffre du résumé.</li>
+        <li><b>Introuvable</b> : le résumé est marqué « à relire » et le chiffre surligné en rouge.</li>
+        <li>PDF sans texte extractible (scanné) : aucun résumé n&apos;est généré, statut « non vérifiable ».</li>
       </ul>
       <p>
         Limites : la présence d&apos;un nombre ne prouve pas qu&apos;il est attribué à la bonne métrique ou à la bonne période

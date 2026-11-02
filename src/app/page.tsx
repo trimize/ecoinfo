@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ReportButton } from "@/components/Actions";
-import { FIG_LABEL, FIG_STYLE, Highlighted } from "@/components/BriefCard";
+import { FIG_LABEL, FIG_STYLE, Highlighted } from "@/components/SummaryCard";
 import { isPro } from "@/lib/auth";
 import { fmtDate } from "@/lib/format";
 import { periodRange, reportCandidates, reportId } from "@/lib/reports";
@@ -47,7 +47,7 @@ function SourceChip({ s }: { s: ReportSource }) {
       <Link href={`/publications/${s.id}`} className="min-w-0 flex-1 truncate text-stone-600 hover:underline" title={s.title}>
         {s.title}
       </Link>
-      {s.hasBrief && <span className="rounded bg-emerald-100 px-1 text-[10px] text-emerald-800">brève vérifiée</span>}
+      {s.hasBrief && <span className="rounded bg-emerald-100 px-1 text-[10px] text-emerald-800">résumé vérifié</span>}
       {s.pdfUrl && (
         <a href={s.pdfUrl} target="_blank" rel="noreferrer" className="text-emerald-700 hover:underline">
           PDF ↗

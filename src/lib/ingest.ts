@@ -4,7 +4,7 @@ import { getStore } from "./store";
 
 const dedupe = (records: AmfRecord[]) => [...new Map(records.map((r) => [r.uin_idt_uin, normalizeRecord(r)])).values()];
 
-/** Sync the last `days` days and pick the publications that deserve a brief. */
+/** Sync the last `days` days and pick the publications that deserve a summary. */
 export async function ingest(days = 5) {
   const records = await fetchRecentRecords(days);
   // The feed can return the same uin twice: keep one.
@@ -26,7 +26,7 @@ export async function ingest(days = 5) {
 
 /**
  * Load history (for month / year summaries) month by month. Publications are scored and
- * de-duplicated, but the brief selection of the latest sync is left untouched.
+ * de-duplicated, but the summary selection of the latest sync is left untouched.
  */
 export async function backfill(from: string, to: string, log: (s: string) => void = () => {}) {
   const store = getStore();

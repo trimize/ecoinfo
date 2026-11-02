@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { GenerateButton } from "@/components/Actions";
 import { isPro } from "@/lib/auth";
-import { BriefCard } from "@/components/BriefCard";
+import { SummaryCard } from "@/components/SummaryCard";
 import { fmtDate, shortSubtype } from "@/lib/format";
 import { getStore } from "@/lib/store";
 
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function PublicationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const store = getStore();
-  const [pub, brief, pro] = await Promise.all([store.getPublication(id), store.getBriefByPublication(id), isPro()]);
+  const [pub, summary, pro] = await Promise.all([store.getPublication(id), store.getSummaryByPublication(id), isPro()]);
   if (!pub) notFound();
 
   const rows: [string, React.ReactNode][] = [
@@ -42,9 +42,9 @@ export default async function PublicationPage({ params }: { params: Promise<{ id
               Ouvrir le PDF ↗
             </a>
           )}
-          <GenerateButton ids={[pub.id]} label={brief ? "Régénérer la brève" : "Générer une brève"} pro={pro} />
+          <GenerateButton ids={[pub.id]} label={summary ? "Régénérer le résumé" : "Générer un résumé"} pro={pro} />
         </div>
-        {brief ? <BriefCard brief={brief} pub={pub} /> : <p className="text-sm text-stone-500">Pas encore de brève pour cette publication.</p>}
+        {summary ? <SummaryCard summary={summary} pub={pub} /> : <p className="text-sm text-stone-500">Pas encore de résumé pour cette publication.</p>}
       </div>
       <aside className="space-y-4">
         <section className="rounded-lg border border-stone-200 bg-white p-4">

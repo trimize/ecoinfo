@@ -1,4 +1,4 @@
-/** Usage: npx tsx scripts/check-figures.ts <pdfUrl> "<brief text>" */
+/** Usage: npx tsx scripts/check-figures.ts <pdfUrl> "<summary text>" */
 import { checkFigures } from "../src/lib/numbers";
 import { fetchPdfText } from "../src/lib/pdf";
 

@@ -16,7 +16,7 @@ export default async function AbonnementPage() {
     <div className="mx-auto max-w-5xl space-y-8">
       <div className="text-center">
         <h1 className="text-3xl font-semibold tracking-tight">Choisissez votre plan</h1>
-        <p className="mt-2 text-stone-500">Des brèves vérifiées, des synthèses sourcées. Et une grille tarifaire très compétitive.</p>
+        <p className="mt-2 text-stone-500">Des résumés vérifiés, des synthèses sourcées. Et une grille tarifaire très compétitive.</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -26,7 +26,7 @@ export default async function AbonnementPage() {
           <p className="text-xs text-stone-500">pour toujours, promis</p>
           <ul className="mt-4 flex-1 space-y-2 text-sm">
             <Check>Synthèses du jour, du mois et de l&apos;année</Check>
-            <Check>Brèves vérifiées et leurs sources</Check>
+            <Check>Résumés vérifiés et leurs sources</Check>
             <Check>Liste filtrable des publications AMF</Check>
             <Check off>Synchronisation et génération IA</Check>
           </ul>
@@ -46,7 +46,7 @@ export default async function AbonnementPage() {
           <ul className="mt-4 flex-1 space-y-2 text-sm">
             <Check>Tout le plan Découverte</Check>
             <Check>Synchronisation du flux AMF à la demande</Check>
-            <Check>Génération des brèves et des synthèses par IA</Check>
+            <Check>Génération des résumés et des synthèses par IA</Check>
             <Check>Support prioritaire (le candidat répond très vite en ce moment)</Check>
           </ul>
           <div className="mt-4">
