@@ -8,11 +8,7 @@ Petite application full stack qui :
 4. génère avec un LLM une brève de 100 à 150 mots (titre, faits clés, chiffres, lien source) ;
 5. vérifie que chaque chiffre de la brève figure dans le PDF source, et signale ceux qui n'y sont pas.
 
-Au-delà de l'énoncé :
-
-- **Synthèses du jour, du mois et de l'année** (page d'accueil) : les événements importants de la période, classés pour un décideur, chacun **adossé aux documents AMF qu'il cite**, avec vérification automatique de ses chiffres ;
-- **plan « Pro Recruteur »** : un code d'accès partagé protège les actions qui consomment des quotas (synchronisation, génération IA) ; la lecture reste ouverte à tous ;
-- **thème clair / sombre** (automatique selon le système, ou au choix).
+Les 5 fonctionnalités demandées sont toutes livrées. Les ajouts au-delà de l'énoncé sont listés dans [Fonctionnalités ajoutées hors énoncé](#fonctionnalités-ajoutées-hors-énoncé).
 
 - **Application déployée** : https://boomingecoinfo.vercel.app
 - **Repo** : https://github.com/trimize/ecoinfo
@@ -27,6 +23,7 @@ npm run ingest -- 5          # (alternative CLI) ingestion des 5 derniers jours
 npm run backfill -- 2026-01-01   # historique pour les synthèses mensuelles / annuelles
 npm run report -- month 2026-10  # synthèse d'une période (day AAAA-MM-JJ | month AAAA-MM | year AAAA)
 npm run generate             # brèves des publications retenues
+npm run cron-plan -- 2026-12-01T00:05:00Z   # simulation du job de nuit (sans appel LLM)
 npm test                     # tests du contrôle des chiffres
 npm run check-figures -- <url_pdf> "texte à vérifier"   # outil de debug du contrôle
 ```
@@ -42,7 +39,7 @@ Sans variables Supabase, les données sont stockées dans `.data/db.json`, ce qu
 | Extraction PDF | **unpdf** (pdf.js) | Fonctionne en serverless, sans binaire natif. |
 | LLM | **Gemini 3.8 Flash** (`@google/genai`, offre gratuite), avec **Claude** (`@anthropic-ai/sdk`) en alternative via `LLM_PROVIDER=anthropic` | Coût nul pour un test. La sortie JSON est contrainte par un schéma JSON généré depuis Zod, puis revalidée par Zod. Les deux fournisseurs passent par la même interface (`src/lib/llm.ts`) : changer de modèle ne touche ni au prompt ni à la vérification. Les erreurs 429 de l'offre gratuite sont relancées avec un délai croissant. |
 | Vérification | **Code déterministe** (regex + normalisation numérique), sans LLM | On ne demande pas au modèle de noter son propre travail. |
-| Planification | Cron Vercel quotidien sur `/api/ingest` (protégé par `CRON_SECRET`) | Synchronise, puis régénère la synthèse du dernier jour et du mois en cours : le visiteur arrive toujours sur une synthèse à jour. |
+| Planification | Cron Vercel chaque nuit à 00:05 UTC sur `/api/cron` (protégé par `CRON_SECRET`) | Synchronise, puis rédige les synthèses arrivées à échéance : voir [Génération automatique des synthèses](#génération-automatique-des-synthèses). |
 | Accès | Code partagé (`ACCESS_PASSWORD`), cookie httpOnly contenant un HMAC du code | Assez pour un exercice : protège les quotas sans gérer de comptes. Vérifié côté serveur dans chaque route API, pas seulement masqué dans l'interface. |
 | Thème | Palettes Tailwind v4 inversées en mode sombre (`globals.css`) | Les couleurs Tailwind sont des variables CSS : inverser les nuances (50↔950…) sous `.dark` adapte toute l'interface sans ajouter une seule classe `dark:`. |
 
@@ -146,6 +143,21 @@ Pour aider à la décision, chaque événement a un « pourquoi c'est important 
 
 Synthèses déjà générées en production : jour (30/10 et 02/11/2026), mois (octobre et novembre 2026) et année 2026 (8 événements adossés à 28 publications, de l'acquisition de SFR par Bouygues à l'avertissement d'Alstom). Exemple, octobre 2026 (Gemini 3.5 Flash) : 6 événements fondés sur 50 publications parmi 1 971. Les 44 chiffres ont été retrouvés dans les sources citées. Les publications liées ont été regroupées correctement : augmentation de capital et émission obligataire de Schneider pour PTC (3 dépôts), résultats de Crédit Agricole et acquisition d'IKB (3 dépôts).
 
+### Génération automatique des synthèses
+
+Un job de nuit (`/api/cron`, planifié dans `vercel.json`) tourne juste après minuit UTC :
+
+1. il synchronise les 5 derniers jours de dépôts, pour que la journée écoulée soit complète ;
+2. il demande à `planReports` (`src/lib/schedule.ts`, fonction pure, testée) les synthèses à rédiger :
+   - **chaque nuit**, la synthèse du **jour qui vient de se terminer** ;
+   - **le dernier jour du mois**, en plus, la synthèse **définitive du mois** ;
+   - **le 31 décembre**, en plus, la synthèse **définitive de l'année** ;
+   - en **rattrapage**, les 7 derniers jours, le dernier mois et la dernière année terminés, dont la synthèse manque ou n'est que provisoire.
+
+Une synthèse est **définitive** si elle a été rédigée après la fin de sa période. Sinon, elle est marquée « Provisoire » dans l'interface et sera remplacée à la clôture. Une nuit ratée (quota, panne) est donc réparée la nuit suivante, et relancer le job ne régénère rien d'inutile.
+
+Les périodes sans publication marquante (week-ends, jours fériés) sont ignorées sans appel au LLM. Le job est plafonné à 4 rédactions par nuit et coupé avant la limite de durée d'exécution, pour rester dans le quota gratuit. Les cas fin de journée, de mois et d'année, la régénération d'une synthèse provisoire, l'idempotence, le rattrapage et le plafond sont couverts par `tests/schedule.test.ts`. `npm run cron-plan -- <date>` simule une nuit sur les vraies données, sans appeler le LLM.
+
 Données : l'historique 2026 (20 959 publications) a été chargé avec `npm run backfill`. Il passe par le point d'accès `/exports` d'Opendatasoft, qui renvoie une période entière en une requête, alors que la pagination de `/records` est plafonnée à 10 000 lignes.
 
 ## 3 prompts clés
@@ -211,6 +223,23 @@ why_it_matters explique l'enjeu de manière factuelle. Pas de recommandation d'a
 - **Synthèses** : comparer avec la période précédente (« ce qui a changé depuis le mois dernier »), filtrer par secteur ou par liste de valeurs suivies, et envoyer la synthèse du jour par e-mail chaque matin.
 - **Quotas LLM** : l'offre gratuite de Gemini est limitée à environ 20 requêtes par jour et par modèle. Le client bascule déjà automatiquement sur le modèle suivant (3.8 Flash → 3.5 Flash → Flash Lite) quand le quota du jour est épuisé. En production, un modèle payant et une file d'attente s'imposent.
 
+## Fonctionnalités ajoutées hors énoncé
+
+| Fonctionnalité | Ce qu'elle apporte |
+|---|---|
+| **Synthèses du jour, du mois et de l'année** (page d'accueil) | Les événements importants de la période, classés pour un décideur, avec un « pourquoi c'est important » et une tonalité. Chaque événement est adossé aux documents AMF qu'il cite, et ses chiffres sont vérifiés contre ces seules sources. |
+| **Génération automatique de nuit** | Synthèse du jour chaque nuit, du mois à sa clôture et de l'année au 31 décembre. Rattrapage des nuits ratées, badge « Provisoire » pour une période en cours. |
+| **Historique 2026 complet** | 20 959 publications chargées par le point d'accès `/exports`, pour des synthèses mensuelles et annuelles réelles. |
+| **Plan « Pro Recruteur »** | Code d'accès partagé, vérifié côté serveur, qui protège les actions consommant des quotas. Les visiteurs lisent tout librement. Page d'abonnement humoristique (« facturé en une seule fois : une offre d'emploi »). |
+| **Thème clair / sombre** | Automatique selon le système, ou au choix ; une seule règle CSS grâce à l'inversion des palettes. |
+| **Contrôle des chiffres visible** | Chaque chiffre est surligné en vert, bleu ou rouge dans les brèves et les synthèses, avec l'extrait exact du PDF où il a été trouvé. |
+| **Classement sans IA** | Les publications les plus marquantes de chaque période restent consultables même sans synthèse rédigée. |
+| **LLM interchangeable et résilient** | Gemini (gratuit) ou Claude selon `LLM_PROVIDER`, avec bascule automatique vers un autre modèle Gemini quand le quota du jour est épuisé. |
+| **Doublons FR/EN fusionnés** | 126 versions anglaises sur 356 publications regroupées avec leur original français. |
+| **Page « Méthode »** | Critère de sélection et méthode de vérification expliqués aux utilisateurs dans l'application. |
+| **Tests et outils** | 14 tests (vérificateur de chiffres, planification). Scripts CLI : ingestion, historique, brèves, synthèses, simulation du job de nuit, recherche dans un PDF source. |
+| **Sécurité** | Next.js et React mis à jour contre la CVE-2025-55182 (React2Shell). Fonctionnement « fermé par défaut » si le code d'accès manque en production. |
+
 ## Temps passé
 
-_à compléter_
+Environ **2 heures**, avec Claude Code. Le temps a été réparti entre l'exploration de l'API et des données, l'application de base (fonctionnalités 1 à 5), le déploiement (Supabase, Vercel), puis les ajouts hors énoncé.

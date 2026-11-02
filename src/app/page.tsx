@@ -4,6 +4,7 @@ import { FIG_LABEL, FIG_STYLE, Highlighted } from "@/components/BriefCard";
 import { isPro } from "@/lib/auth";
 import { fmtDate } from "@/lib/format";
 import { periodRange, reportCandidates, reportId } from "@/lib/reports";
+import { periodEnd } from "@/lib/schedule";
 import { getStore } from "@/lib/store";
 import type { Period, Report, ReportEvent, ReportSource } from "@/lib/types";
 
@@ -120,6 +121,14 @@ function ReportView({ report }: { report: Report }) {
           >
             {report.status === "verified" ? "Sources et chiffres vérifiés" : "À relire"}
           </span>
+          {Date.parse(report.createdAt) < periodEnd(report.period, report.key) && (
+            <span
+              className="rounded-full bg-sky-100 px-2 py-0.5 font-medium text-sky-900"
+              title="Rédigée avant la fin de la période : la version définitive est générée automatiquement à sa clôture."
+            >
+              Provisoire
+            </span>
+          )}
           <span className="text-stone-500">{report.statusReason}</span>
         </div>
         <h2 className="text-xl font-semibold leading-snug">

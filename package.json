@@ -12,7 +12,8 @@
     "test": "tsx --test tests/*.test.ts",
     "generate": "tsx --env-file=.env scripts/generate.ts",
     "backfill": "tsx --env-file=.env scripts/backfill.ts",
-    "report": "tsx --env-file=.env scripts/report.ts"
+    "report": "tsx --env-file=.env scripts/report.ts",
+    "cron-plan": "tsx --env-file=.env scripts/cron-plan.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",
