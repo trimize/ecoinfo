@@ -16,6 +16,7 @@ Règles impératives :
 - Uniquement des informations présentes dans le document fourni. Aucune connaissance extérieure, aucun cours de bourse, aucune comparaison non citée dans le document.
 - Chaque chiffre doit être recopié tel qu'il apparaît dans le document (même valeur, même unité, même période). Ne calcule rien, n'arrondis pas, ne convertis pas les unités ni les devises.
 - Écris les nombres en notation française : espace pour les milliers, virgule pour les décimales (ex. 1 234,5 M€ ; 3,2 %).
+- Les montants négatifs notés entre parenthèses dans les tableaux comptables, comme « (4) % » ou « (1 248) M€ », s'écrivent en toutes lettres pour le lecteur : « une marge négative d'environ 4 % », « un cash-flow libre négatif de 1 248 millions d'euros ». N'utilise jamais de parenthèses autour d'un chiffre.
 - Mentionne la période concernée (ex. troisième trimestre 2026) quand le document la précise.
 - Si le document est en anglais, rédige en français mais garde les chiffres identiques.
 - Ton neutre et factuel : pas d'adjectifs promotionnels repris du communiqué sans les attribuer à la société (« selon le groupe »).
