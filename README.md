@@ -252,4 +252,4 @@ why_it_matters explique l'enjeu de manière factuelle. Pas de recommandation d'a
 
 ## Temps passé
 
-Environ **2 heures**, avec Claude Code. Le temps a été réparti entre l'exploration de l'API et des données, l'application de base (fonctionnalités 1 à 5), le déploiement (Supabase, Vercel), puis les ajouts hors énoncé.
+Environ **2 heures**, avec Claude Code (Comme ça j'ai pu tester). Le temps a été réparti entre l'exploration de l'API et des données, l'application de base (fonctionnalités 1 à 5), le déploiement (Supabase, Vercel), puis les ajouts hors énoncé.
