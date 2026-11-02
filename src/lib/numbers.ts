@@ -128,11 +128,14 @@ const unitSuffix = (t: NumToken) => (t.pct ? " %" : t.scale === 1e9 ? " Md" : t.
 /** Stable label of a brief figure, used to link highlighted text to its check. */
 export const figureLabel = (t: NumToken) => t.raw + unitSuffix(t);
 
+/** Stock-index names contain digits but are not figures to verify. */
+export const INDEX_NAMES = /\b(CAC|SBF|Euro ?Stoxx|Stoxx|CAC Mid|CAC Small|DAX|FTSE|S&P) ?\d{2,3}\b/gi;
+
 export function checkFigures(briefText: string, sourceText: string): FigureCheck[] {
   const src = normalizeText(sourceText);
   const srcTokens = extractNumbers(src);
-  // the brief is prose: no table-cell splitting
-  const briefTokens = extractNumbers(normalizeText(briefText), false);
+  // The brief is prose: no table-cell splitting. Index names ("CAC 40") are names, not figures.
+  const briefTokens = extractNumbers(normalizeText(briefText).replace(INDEX_NAMES, (m) => m.replace(/\d/g, "#")), false);
 
   const seen = new Set<string>();
   const results: FigureCheck[] = [];

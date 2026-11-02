@@ -47,3 +47,7 @@ test("invented figures and coincidences are not verified", () => {
   assert.equal(s["6 Md"], "verified");
   assert.equal(s["79 M"], "not_found"); // "79" only exists in the phone number // same value as "6,0 milliards" - not the "6" of the phone number
 });
+
+test("index names are not figures", () => {
+  assert.deepEqual(checkFigures("Les géants du CAC 40 et du SBF 120 publient", SOURCE), []);
+});
