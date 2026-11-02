@@ -13,19 +13,19 @@ const STATUS_LABEL: Record<Brief["status"], string> = {
   needs_review: "À relire",
   unverifiable: "Non vérifiable",
 };
-const FIG_STYLE: Record<FigureCheck["status"], string> = {
+export const FIG_STYLE: Record<FigureCheck["status"], string> = {
   verified: "bg-emerald-100 text-emerald-900",
   rounded: "bg-sky-100 text-sky-900",
   not_found: "bg-red-100 text-red-900 underline decoration-red-500 decoration-wavy",
 };
-const FIG_LABEL: Record<FigureCheck["status"], string> = {
+export const FIG_LABEL: Record<FigureCheck["status"], string> = {
   verified: "trouvé",
   rounded: "arrondi / converti",
   not_found: "introuvable",
 };
 
 /** Body text with each number wrapped in a colored span according to its check. */
-function Highlighted({ text, figures }: { text: string; figures: FigureCheck[] }) {
+export function Highlighted({ text, figures }: { text: string; figures: FigureCheck[] }) {
   const norm = normalizeText(text);
   const byLabel = new Map(figures.map((f) => [f.raw, f]));
   const parts: React.ReactNode[] = [];

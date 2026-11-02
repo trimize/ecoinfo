@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requirePro } from "@/lib/auth";
 import { generateBrief } from "@/lib/brief";
 import { missingKey } from "@/lib/llm";
 import { getStore } from "@/lib/store";
@@ -8,6 +9,8 @@ export const dynamic = "force-dynamic";
 
 /** POST { publicationId } -> generate (or regenerate) the brief for one publication. */
 export async function POST(req: Request) {
+  const denied = await requirePro();
+  if (denied) return NextResponse.json(denied, { status: 402 });
   const { publicationId } = (await req.json().catch(() => ({}))) as { publicationId?: string };
   if (!publicationId) return NextResponse.json({ error: "publicationId requis" }, { status: 400 });
   const store = getStore();

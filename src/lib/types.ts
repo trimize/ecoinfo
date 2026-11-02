@@ -55,3 +55,46 @@ export interface PublicationFilters {
   selectedOnly?: boolean;
   hideDuplicates?: boolean;
 }
+
+export type Period = "day" | "month" | "year";
+
+export interface ReportSource {
+  id: string;
+  company: string;
+  title: string;
+  publishedAt: string;
+  pdfUrl: string | null;
+  score: number;
+  subtype: string | null;
+  hasBrief: boolean;
+}
+
+export interface ReportEvent {
+  title: string;
+  summary: string;
+  whyItMatters: string;
+  tone: "positif" | "négatif" | "neutre" | "mixte";
+  companies: string[];
+  sourceIds: string[];
+  figures: FigureCheck[];
+  status: "verified" | "needs_review";
+}
+
+export interface Report {
+  id: string; // `${period}:${key}`
+  period: Period;
+  key: string; // 2026-11-02 | 2026-11 | 2026
+  from: string;
+  to: string;
+  headline: string;
+  overview: string;
+  overviewFigures: FigureCheck[];
+  events: ReportEvent[];
+  sources: ReportSource[]; // candidates given to the model (all backed by an AMF document)
+  publicationsInPeriod: number;
+  droppedEvents: number; // events rejected because they cited no valid source
+  status: "verified" | "needs_review";
+  statusReason: string;
+  model: string;
+  createdAt: string;
+}

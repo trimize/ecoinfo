@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { promises as fs } from "fs";
 import path from "path";
-import type { Brief, Publication, PublicationFilters } from "./types";
+import type { Brief, Publication, PublicationFilters, Report } from "./types";
 
 /**
  * Storage: Supabase (Postgres) when SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are set,
@@ -15,6 +15,14 @@ export interface Store {
   saveBrief(b: Brief): Promise<void>;
   listBriefs(): Promise<Brief[]>;
   getBriefByPublication(id: string): Promise<Brief | null>;
+  /** Most newsworthy, non-duplicate publications of [from, to] (YYYY-MM-DD, inclusive). */
+  topPublications(from: string, to: string, minScore: number, limit: number): Promise<Publication[]>;
+  countPublications(from: string, to: string): Promise<number>;
+  /** Latest day (YYYY-MM-DD) that has publications, or null. */
+  latestDay(): Promise<string | null>;
+  saveReport(r: Report): Promise<void>;
+  getReport(id: string): Promise<Report | null>;
+  listReports(): Promise<Pick<Report, "id" | "period" | "key" | "headline" | "createdAt">[]>;
 }
 
 // ---------- shared filtering for the local store ----------
@@ -34,11 +42,16 @@ const uniqSorted = (xs: (string | null)[]) =>
 // ---------- local JSON ----------
 class FileStore implements Store {
   private file = path.join(process.cwd(), ".data", "db.json");
-  private async read(): Promise<{ publications: Record<string, Publication>; briefs: Record<string, Brief> }> {
+  private async read(): Promise<{
+    publications: Record<string, Publication>;
+    briefs: Record<string, Brief>;
+    reports: Record<string, Report>;
+  }> {
     try {
-      return JSON.parse(await fs.readFile(this.file, "utf8"));
+      const db = JSON.parse(await fs.readFile(this.file, "utf8"));
+      return { publications: {}, briefs: {}, reports: {}, ...db };
     } catch {
-      return { publications: {}, briefs: {} };
+      return { publications: {}, briefs: {}, reports: {} };
     }
   }
   private async write(db: Awaited<ReturnType<FileStore["read"]>>) {
@@ -77,6 +90,32 @@ class FileStore implements Store {
   }
   async getBriefByPublication(id: string) {
     return (await this.read()).briefs[id] ?? null;
+  }
+  async topPublications(from: string, to: string, minScore: number, limit: number) {
+    return (await this.listPublications({ from, to, hideDuplicates: true }))
+      .filter((p) => p.score >= minScore)
+      .sort((a, b) => b.score - a.score || b.publishedAt.localeCompare(a.publishedAt))
+      .slice(0, limit);
+  }
+  async countPublications(from: string, to: string) {
+    return (await this.listPublications({ from, to })).length;
+  }
+  async latestDay() {
+    const ps = Object.values((await this.read()).publications);
+    return ps.length ? ps.reduce((m, p) => (p.publishedAt > m ? p.publishedAt : m), "").slice(0, 10) : null;
+  }
+  async saveReport(r: Report) {
+    const db = await this.read();
+    db.reports[r.id] = r;
+    await this.write(db);
+  }
+  async getReport(id: string) {
+    return (await this.read()).reports[id] ?? null;
+  }
+  async listReports() {
+    return Object.values((await this.read()).reports)
+      .map(({ id, period, key, headline, createdAt }) => ({ id, period, key, headline, createdAt }))
+      .sort((a, b) => b.key.localeCompare(a.key));
   }
 }
 
@@ -200,6 +239,42 @@ class SupabaseStore implements Store {
       await this.db.from("briefs").select("data").eq("publication_id", id).maybeSingle(),
     ) as { data: Brief } | null;
     return r?.data ?? null;
+  }
+  private range<Q extends { gte(column: string, value: string): Q; lt(column: string, value: string): Q }>(q: Q, from: string, to: string) {
+    return q.gte("published_at", from).lt("published_at", new Date(Date.parse(to) + 86_400_000).toISOString());
+  }
+  async topPublications(from: string, to: string, minScore: number, limit: number) {
+    const q = this.db.from("publications").select("*").is("duplicate_of", null).gte("score", minScore);
+    const rows = this.check(
+      await this.range(q, from, to).order("score", { ascending: false }).order("published_at", { ascending: false }).limit(limit),
+    ) as PubRow[];
+    return rows.map(fromRow);
+  }
+  async countPublications(from: string, to: string) {
+    const res = await this.range(this.db.from("publications").select("id", { count: "exact", head: true }), from, to);
+    if (res.error) throw new Error(`Supabase: ${res.error.message}`);
+    return res.count ?? 0;
+  }
+  async latestDay() {
+    const r = this.check(
+      await this.db.from("publications").select("published_at").order("published_at", { ascending: false }).limit(1).maybeSingle(),
+    ) as { published_at: string } | null;
+    return r ? new Date(r.published_at).toISOString().slice(0, 10) : null;
+  }
+  async saveReport(r: Report) {
+    this.check(
+      await this.db.from("reports").upsert({ id: r.id, period: r.period, key: r.key, data: r, created_at: r.createdAt }),
+    );
+  }
+  async getReport(id: string) {
+    const r = this.check(await this.db.from("reports").select("data").eq("id", id).maybeSingle()) as { data: Report } | null;
+    return r?.data ?? null;
+  }
+  async listReports() {
+    const rows = this.check(
+      await this.db.from("reports").select("id,period,key,data->>headline,created_at").order("key", { ascending: false }),
+    ) as { id: string; period: Report["period"]; key: string; headline: string; created_at: string }[];
+    return rows.map((r) => ({ id: r.id, period: r.period, key: r.key, headline: r.headline, createdAt: r.created_at }));
   }
 }
 

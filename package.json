@@ -10,7 +10,9 @@
     "ingest": "tsx --env-file=.env scripts/ingest.ts",
     "check-figures": "tsx --env-file=.env scripts/check-figures.ts",
     "test": "tsx --test tests/*.test.ts",
-    "generate": "tsx --env-file=.env scripts/generate.ts"
+    "generate": "tsx --env-file=.env scripts/generate.ts",
+    "backfill": "tsx --env-file=.env scripts/backfill.ts",
+    "report": "tsx --env-file=.env scripts/report.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",

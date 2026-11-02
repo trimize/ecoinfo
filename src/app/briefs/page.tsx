@@ -24,7 +24,7 @@ export default async function BriefsPage() {
       </div>
       {briefs.length === 0 ? (
         <p className="rounded-lg border border-dashed border-stone-300 p-8 text-center text-stone-500">
-          Aucune brève. Depuis la liste des publications, cliquez sur « Générer les brèves ».
+          Aucune brève. Depuis la liste des publications (onglet Publications), cliquez sur « Générer les brèves ».
         </p>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">

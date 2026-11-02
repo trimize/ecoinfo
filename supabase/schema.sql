@@ -34,3 +34,13 @@ create table if not exists briefs (
 -- The app talks to Postgres server-side with the service role key only; keep RLS on, no public policies.
 alter table publications enable row level security;
 alter table briefs enable row level security;
+
+-- Day / month / year summaries (added with the "Synthèses" feature).
+create table if not exists reports (
+  id         text primary key,                    -- e.g. day:2026-11-02, month:2026-10, year:2026
+  period     text not null,                       -- day | month | year
+  key        text not null,
+  data       jsonb not null,                      -- full Report object (events, cited sources, figure checks)
+  created_at timestamptz not null default now()
+);
+alter table reports enable row level security;

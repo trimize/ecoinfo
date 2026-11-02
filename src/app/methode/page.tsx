@@ -30,7 +30,15 @@ export default function MethodePage() {
         document, recopier les chiffres sans calcul ni conversion. Sortie structurée (titre, corps, faits clés).
       </p>
 
-      <h2>4. Vérification des chiffres (sans LLM)</h2>
+      <h2>4. Synthèses jour / mois / année</h2>
+      <ul>
+        <li>Le LLM reçoit une liste fermée : les publications les plus marquantes de la période (même score), avec leur titre et leur brève vérifiée si elle existe.</li>
+        <li>Chaque événement doit citer les identifiants de ses sources ; un événement sans source valide est écarté par le code.</li>
+        <li>Les chiffres de chaque événement sont vérifiés uniquement contre les sources qu&apos;il cite.</li>
+        <li>Aucune recommandation d&apos;achat ou de vente : la synthèse informe, la décision vous appartient.</li>
+      </ul>
+
+      <h2>5. Vérification des chiffres (sans LLM)</h2>
       <ul>
         <li>Tous les nombres du titre, du corps et des faits clés sont extraits par expression régulière, avec leur unité (%, milliers, millions, milliards).</li>
         <li>Les nombres du PDF sont lus en notation française et anglaise ; un jeton ambigu (« 1,234 ») donne deux valeurs candidates.</li>

@@ -8,6 +8,12 @@ Petite application full stack qui :
 4. génère avec un LLM une brève de 100 à 150 mots (titre, faits clés, chiffres, lien source) ;
 5. vérifie que chaque chiffre de la brève figure dans le PDF source, et signale ceux qui n'y sont pas.
 
+Au-delà de l'énoncé :
+
+- **Synthèses du jour, du mois et de l'année** (page d'accueil) : les événements importants de la période, classés pour un décideur, chacun **adossé aux documents AMF qu'il cite**, avec vérification automatique de ses chiffres ;
+- **plan « Pro Recruteur »** : un code d'accès partagé protège les actions qui consomment des quotas (synchronisation, génération IA) ; la lecture reste ouverte à tous ;
+- **thème clair / sombre** (automatique selon le système, ou au choix).
+
 - **Application déployée** : https://boomingecoinfo.vercel.app
 - **Repo** : https://github.com/trimize/ecoinfo
 
@@ -18,6 +24,9 @@ npm install
 cp .env.example .env.local   # renseigner GEMINI_API_KEY (gratuite : https://aistudio.google.com/apikey)
 npm run dev                  # http://localhost:3000, puis « Synchroniser » et « Générer les brèves »
 npm run ingest -- 5          # (alternative CLI) ingestion des 5 derniers jours
+npm run backfill -- 2026-01-01   # historique pour les synthèses mensuelles / annuelles
+npm run report -- month 2026-10  # synthèse d'une période (day AAAA-MM-JJ | month AAAA-MM | year AAAA)
+npm run generate             # brèves des publications retenues
 npm test                     # tests du contrôle des chiffres
 npm run check-figures -- <url_pdf> "texte à vérifier"   # outil de debug du contrôle
 ```
@@ -33,7 +42,9 @@ Sans variables Supabase, les données sont stockées dans `.data/db.json`, ce qu
 | Extraction PDF | **unpdf** (pdf.js) | Fonctionne en serverless, sans binaire natif. |
 | LLM | **Gemini 3.8 Flash** (`@google/genai`, offre gratuite), avec **Claude** (`@anthropic-ai/sdk`) en alternative via `LLM_PROVIDER=anthropic` | Coût nul pour un test. La sortie JSON est contrainte par un schéma JSON généré depuis Zod, puis revalidée par Zod. Les deux fournisseurs passent par la même interface (`src/lib/llm.ts`) : changer de modèle ne touche ni au prompt ni à la vérification. Les erreurs 429 de l'offre gratuite sont relancées avec un délai croissant. |
 | Vérification | **Code déterministe** (regex + normalisation numérique), sans LLM | On ne demande pas au modèle de noter son propre travail. |
-| Planification | Cron Vercel quotidien sur `/api/ingest` | Garde la base à jour sans action manuelle. |
+| Planification | Cron Vercel quotidien sur `/api/ingest` (protégé par `CRON_SECRET`) | Synchronise, puis régénère la synthèse du dernier jour et du mois en cours : le visiteur arrive toujours sur une synthèse à jour. |
+| Accès | Code partagé (`ACCESS_PASSWORD`), cookie httpOnly contenant un HMAC du code | Assez pour un exercice : protège les quotas sans gérer de comptes. Vérifié côté serveur dans chaque route API, pas seulement masqué dans l'interface. |
+| Thème | Palettes Tailwind v4 inversées en mode sombre (`globals.css`) | Les couleurs Tailwind sont des variables CSS : inverser les nuances (50↔950…) sous `.dark` adapte toute l'interface sans ajouter une seule classe `dark:`. |
 
 La génération se fait **une publication par requête HTTP** : le bouton enchaîne les appels côté client. Chaque appel reste ainsi sous la limite de durée d'une fonction serverless, et un échec n'empêche pas les autres brèves.
 
@@ -45,7 +56,9 @@ src/lib/llm.ts       fournisseurs LLM (Gemini par défaut, Claude en option), so
 src/lib/brief.ts     prompt + assemblage de la brève et de son statut
 src/lib/numbers.ts   extraction et vérification des chiffres
 src/lib/store.ts     Supabase / fichier JSON
-src/app/             pages (liste, fiche, brèves, méthode) et routes API
+src/lib/reports.ts   synthèses jour / mois / année : candidats, prompt, contrôle des sources et des chiffres
+src/lib/auth.ts      plan « Pro » (code d'accès partagé)
+src/app/             pages (synthèses, publications, fiche, brèves, méthode, abonnement) et routes API
 ```
 
 ## Comprendre la structure des données
@@ -119,6 +132,22 @@ Le principe est que **le LLM rédige, du code vérifie.**
 
 Les règles de correspondance sont donc conservatrices : pas de facteur d'échelle deviné, précision identique exigée pour les cellules sans unité. Cela produit plus de fausses alertes, et c'est voulu : un faux « vérifié » est plus grave qu'un faux « à relire ». Les cas sont couverts par `tests/numbers.test.ts`.
 
+## Synthèses du jour, du mois et de l'année
+
+C'est la page d'accueil, car c'est ce qu'un utilisateur veut voir en premier : **« que s'est-il passé d'important ? »**. Les onglets Jour / Mois / Année, les flèches et le sélecteur de date permettent de naviguer, et la synthèse la plus récente s'affiche par défaut.
+
+Les synthèses sont construites pour être **adossées à des documents**, à trois niveaux :
+
+1. **Liste fermée de sources** : le LLM ne reçoit que les publications les plus marquantes de la période. Elles sont choisies par le même score que les brèves, sans doublons FR/EN, avec 2 à 4 publications par société au maximum (25 pour un jour, 50 pour un mois, 80 pour une année). Pour chacune, il reçoit son titre et, si elle existe, sa brève déjà vérifiée. Chaque publication porte un identifiant.
+2. **Citations obligatoires et contrôlées** : chaque événement doit citer les identifiants de ses sources. Le code écarte tout événement qui ne cite aucune source connue, et ne garde que les identifiants qui existent : un lien inventé est impossible. À l'écran, chaque événement liste ses sources, avec un lien vers la fiche, le PDF AMF et le badge « brève vérifiée » quand il y en a une.
+3. **Chiffres vérifiés source par source** : le vérificateur des brèves est réutilisé, mais il compare chaque événement **uniquement au texte des sources qu'il cite**. Un chiffre vrai ailleurs mais attribué au mauvais événement est donc signalé. La vue d'ensemble ne doit contenir aucun chiffre.
+
+Pour aider à la décision, chaque événement a un « pourquoi c'est important » et une tonalité pour la société concernée (positif, négatif, neutre, mixte). Le prompt interdit toute recommandation d'achat ou de vente et toute prévision de cours. La colonne de droite montre le **classement automatique sans IA** des mêmes sources : il reste disponible quand aucune synthèse n'a encore été rédigée.
+
+Exemple, octobre 2026 (Gemini 3.5 Flash) : 6 événements fondés sur 50 publications parmi 1 971. Les 44 chiffres ont été retrouvés dans les sources citées. Les publications liées ont été regroupées correctement : augmentation de capital et émission obligataire de Schneider pour PTC (3 dépôts), résultats de Crédit Agricole et acquisition d'IKB (3 dépôts).
+
+Données : l'historique 2026 (20 959 publications) a été chargé avec `npm run backfill`. Il passe par le point d'accès `/exports` d'Opendatasoft, qui renvoie une période entière en une requête, alors que la pagination de `/records` est plafonnée à 10 000 lignes.
+
 ## 3 prompts clés
 
 **1. Prompt système de rédaction** (`src/lib/brief.ts`) :
@@ -147,7 +176,17 @@ La notation française imposée n'est pas qu'un choix de style : elle rend le pa
 Rédige la brève (titre, corps de 100 à 150 mots, 3 à 5 faits clés chiffrés quand c'est possible).
 ```
 
-**3. Prompt de développement (Claude Code)** pour concevoir le vérificateur :
+**3. Prompt système des synthèses** (`src/lib/reports.ts`, extrait) :
+
+```
+Tu n'utilises QUE les publications fournies. Aucune connaissance extérieure, aucun cours de bourse, aucun événement absent de la liste.
+Chaque événement cite dans source_ids les identifiants exacts (attribut id) des publications qui le fondent. Un événement sans source n'existe pas.
+Un chiffre ne peut apparaître que s'il figure dans le titre ou la brève d'une publication citée par cet événement ; recopie-le sans calcul, arrondi ni conversion. Dans la vue d'ensemble, pas de chiffres.
+Regroupe les publications qui traitent du même sujet en un seul événement. Classe les événements du plus au moins important pour un investisseur ou un dirigeant.
+why_it_matters explique l'enjeu de manière factuelle. Pas de recommandation d'achat ou de vente, pas de prévision de cours.
+```
+
+**Prompt de développement (Claude Code)** pour concevoir le vérificateur :
 
 > « Écris une fonction déterministe qui vérifie que chaque nombre d'un texte français existe dans un texte source pouvant être en notation française ou anglaise, avec unités (%, M, Md, bn), arrondis et conversions d'unités. Un faux positif est plus grave qu'un faux négatif. Teste-la sur le PDF Schneider Electric avec un mélange de chiffres vrais, arrondis et inventés. »
 
@@ -167,7 +206,9 @@ Rédige la brève (titre, corps de 100 à 150 mots, 3 à 5 faits clés chiffrés
 - **Fiabilité de l'ingestion** : ingestion incrémentale par curseur de date, gestion des mises à jour (`inf_upg_sts` ≠ `NEW`), OCR pour les PDF scannés, référentiel des émetteurs (ISIN / LEI) pour corriger les noms.
 - **Workflow rédactionnel** : édition de la brève dans l'interface, avec revérification en direct à chaque modification ; statut publié / rejeté ; historique des versions ; alertes temps réel sur les informations privilégiées des valeurs suivies.
 - **Évaluation** : constituer un jeu d'environ 50 publications annotées pour mesurer le taux de chiffres introuvables et la qualité éditoriale selon le prompt et le modèle.
-- **Sécurité** : authentification sur les routes qui déclenchent des appels LLM (quota gratuit facilement épuisable, ou coût avec un modèle payant) (aujourd'hui publiques).
+- **Sécurité** : remplacer le code partagé par de vrais comptes (Supabase Auth), avec un quota par utilisateur et une limitation de débit sur `/api/auth`.
+- **Synthèses** : comparer avec la période précédente (« ce qui a changé depuis le mois dernier »), filtrer par secteur ou par liste de valeurs suivies, et envoyer la synthèse du jour par e-mail chaque matin.
+- **Quotas LLM** : l'offre gratuite de Gemini est limitée à environ 20 requêtes par jour et par modèle. Le client bascule déjà automatiquement sur le modèle suivant (3.8 Flash → 3.5 Flash → Flash Lite) quand le quota du jour est épuisé. En production, un modèle payant et une file d'attente s'imposent.
 
 ## Temps passé
 

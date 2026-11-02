@@ -5,9 +5,8 @@ import type { Publication } from "./types";
  * referenced on data.gouv.fr as "API Info-Financière".
  * Dataset: flux-amf-new-prod - one record per regulated publication filed with the AMF.
  */
-const BASE =
-  "https://www.info-financiere.gouv.fr/api/explore/v2.1/catalog/datasets/flux-amf-new-prod/records";
-const PAGE_SIZE = 100; // Opendatasoft maximum per request
+const EXPORT =
+  "https://www.info-financiere.gouv.fr/api/explore/v2.1/catalog/datasets/flux-amf-new-prod/exports/json";
 
 /** Raw record shape (only the fields we use). */
 export interface AmfRecord {
@@ -42,23 +41,25 @@ const FIELDS = [
   "sous_type_d_information",
 ].join(",");
 
+/**
+ * All records received by the AMF between two dates (inclusive, YYYY-MM-DD), in one request:
+ * the /exports endpoint is not capped at 10 000 rows like /records pagination.
+ */
+export async function fetchRange(from: string, to: string): Promise<AmfRecord[]> {
+  const end = new Date(Date.parse(to) + 86_400_000).toISOString().slice(0, 10);
+  const url = new URL(EXPORT);
+  url.searchParams.set("select", FIELDS);
+  url.searchParams.set("where", `uin_dat_amf >= date'${from}' and uin_dat_amf < date'${end}'`);
+  url.searchParams.set("order_by", "uin_dat_amf desc");
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`AMF API ${res.status}: ${await res.text()}`);
+  return (await res.json()) as AmfRecord[];
+}
+
 export async function fetchRecentRecords(days: number): Promise<AmfRecord[]> {
+  const today = new Date().toISOString().slice(0, 10);
   const since = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
-  const out: AmfRecord[] = [];
-  for (let offset = 0; offset < 10_000; offset += PAGE_SIZE) {
-    const url = new URL(BASE);
-    url.searchParams.set("select", FIELDS);
-    url.searchParams.set("where", `uin_dat_amf >= date'${since}'`);
-    url.searchParams.set("order_by", "uin_dat_amf desc");
-    url.searchParams.set("limit", String(PAGE_SIZE));
-    url.searchParams.set("offset", String(offset));
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) throw new Error(`AMF API ${res.status}: ${await res.text()}`);
-    const json = (await res.json()) as { total_count: number; results: AmfRecord[] };
-    out.push(...json.results);
-    if (json.results.length < PAGE_SIZE || out.length >= json.total_count) break;
-  }
-  return out;
+  return fetchRange(since, today);
 }
 
 /** "["005002", "001007"]" (stringified array) or "005002" -> ["005002","001007"] */

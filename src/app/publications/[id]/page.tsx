@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { GenerateButton } from "@/components/Actions";
+import { isPro } from "@/lib/auth";
 import { BriefCard } from "@/components/BriefCard";
 import { fmtDate, shortSubtype } from "@/lib/format";
 import { getStore } from "@/lib/store";
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function PublicationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const store = getStore();
-  const [pub, brief] = await Promise.all([store.getPublication(id), store.getBriefByPublication(id)]);
+  const [pub, brief, pro] = await Promise.all([store.getPublication(id), store.getBriefByPublication(id), isPro()]);
   if (!pub) notFound();
 
   const rows: [string, React.ReactNode][] = [
@@ -41,7 +42,7 @@ export default async function PublicationPage({ params }: { params: Promise<{ id
               Ouvrir le PDF ↗
             </a>
           )}
-          <GenerateButton ids={[pub.id]} label={brief ? "Régénérer la brève" : "Générer une brève"} />
+          <GenerateButton ids={[pub.id]} label={brief ? "Régénérer la brève" : "Générer une brève"} pro={pro} />
         </div>
         {brief ? <BriefCard brief={brief} pub={pub} /> : <p className="text-sm text-stone-500">Pas encore de brève pour cette publication.</p>}
       </div>
