@@ -206,7 +206,8 @@ class SupabaseStore implements Store {
 let store: Store | null = null;
 export function getStore(): Store {
   if (store) return store;
-  const url = process.env.SUPABASE_URL;
+  // Accept the REST endpoint too ("https://x.supabase.co/rest/v1/"): supabase-js wants the project URL.
+  const url = process.env.SUPABASE_URL?.trim().replace(/\/rest\/v1\/?$/, "").replace(/\/+$/, "");
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   store = url && key ? new SupabaseStore(createClient(url, key, { auth: { persistSession: false } })) : new FileStore();
   return store;

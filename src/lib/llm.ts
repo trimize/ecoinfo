@@ -18,7 +18,7 @@ export function currentProvider(): Provider {
 
 export function currentModel(): string {
   if (process.env.LLM_MODEL) return process.env.LLM_MODEL;
-  return currentProvider() === "gemini" ? "gemini-2.5-flash" : "claude-opus-5-5";
+  return currentProvider() === "gemini" ? "gemini-3.8-flash" : "claude-opus-5-5";
 }
 
 export function missingKey(): string | null {
